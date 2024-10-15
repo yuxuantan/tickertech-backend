@@ -5,7 +5,7 @@ import utils.ticker_getter as tg
 
 chat_ids = [
     27392018,  # me
-    # 432502167 # rainbow
+    432502167 # rainbow
 ]
 
 def alert(indicator_name):
