@@ -82,7 +82,8 @@ def calculate_and_save_indicator_results():
                         table_name,
                         {
                             "ticker": ticker,
-                            "analysis": analysis_result,
+                            "dates": dates,
+                            # "analysis": analysis_result,
                             "created_at": "now()",
                         },
                     )
