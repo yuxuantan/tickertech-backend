@@ -4,3 +4,4 @@ pyTelegramBotAPI
 yfinance
 pytickersymbols
 supabase
+python-dotenv
