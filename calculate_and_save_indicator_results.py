@@ -1,12 +1,7 @@
-import threading
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import pytz
-import numpy as np
-import pandas as pd
 import utils.ticker_getter as tg
 import utils.supabase as db
-import utils.indicator_helpers as iu
 import utils.indicators as ie
 
 
@@ -14,126 +9,96 @@ def calculate_and_save_indicator_results():
     stock_list = tg.get_all_tickers()
 
     # Fetch cached data from Supabase
-    apex_bull_appear_cache = db.fetch_cached_data_from_supabase("apex_bull_appear")
-    apex_bull_raging_cache = db.fetch_cached_data_from_supabase("apex_bull_raging")
-    apex_bear_appear_cache = db.fetch_cached_data_from_supabase("apex_bear_appear")
-    apex_bear_raging_cache = db.fetch_cached_data_from_supabase("apex_bear_raging")
-
-    def filter_tickers(cache, description):
-        sgt = pytz.timezone("Asia/Singapore")
-        today_sgt = datetime.now(sgt).replace(hour=5, minute=0, second=0, microsecond=0)
-
-        filtered_tickers = [
-            ticker["ticker"]
-            for ticker in cache
-            if datetime.fromisoformat(
-                ticker["created_at"].split(".")[0] + "+00:00"
-            ).astimezone(sgt)
-            > today_sgt
-        ]
-        print(f"Tickers no need to screen {description}: {len(filtered_tickers)}")
-        return list(set(stock_list) - set(filtered_tickers))
-
-    tickers_to_screen = {
-        "bull_appear": filter_tickers(apex_bull_appear_cache, "bull appear"),
-        "bull_raging": filter_tickers(apex_bull_raging_cache, "bull raging"),
-        "bear_appear": filter_tickers(apex_bear_appear_cache, "bear appear"),
-        "bear_raging": filter_tickers(apex_bear_raging_cache, "bear raging"),
+    cached_data = {
+        "apex_bull_appear": db.fetch_cached_data_from_supabase("apex_bull_appear"),
+        "apex_bull_raging": db.fetch_cached_data_from_supabase("apex_bull_raging"),
+        "apex_bear_appear": db.fetch_cached_data_from_supabase("apex_bear_appear"),
+        "apex_bear_raging": db.fetch_cached_data_from_supabase("apex_bear_raging")
     }
 
-    for key, tickers in tickers_to_screen.items():
-        print(f"Tickers to screen for {key.replace('_', ' ')}: {len(tickers)}")
+    # Filter tickers based on cache and current day
+    def filter_tickers(cache):
+        sgt = pytz.timezone("Asia/Singapore")
+        today_sgt = datetime.now(sgt).replace(hour=5, minute=0, second=0, microsecond=0)
+        return [
+            ticker["ticker"]
+            for ticker in cache
+            if datetime.fromisoformat(ticker["created_at"].split(".")[0] + "+00:00").astimezone(sgt) > today_sgt
+        ]
 
-    # Track total tickers to screen
-    total_unique_tickers_to_screen = len(set(sum(tickers_to_screen.values(), [])))
-    tickers_screened = {key: 0 for key in tickers_to_screen}
-    tickers_screened_total = 0
+    # Tickers to screen by strategy
+    tickers_to_screen = {
+        strategy: list(set(stock_list) - set(filter_tickers(cache)))
+        for strategy, cache in cached_data.items()
+    }
 
-    ticker_screened_lock = threading.Lock()
+    # Track the number of tickers to screen and already screened
+    already_screened = {strategy: len(filter_tickers(cache)) for strategy, cache in cached_data.items()}
+    to_screen_count = {strategy: len(tickers) for strategy, tickers in tickers_to_screen.items()}
+    total_to_screen = sum(to_screen_count.values())
 
-    # Synchronous fetching
-    def process_ticker_synchronously(ticker):
+    print(f"Total number of tickers to screen: {total_to_screen}")
+    for strategy, count in to_screen_count.items():
+        print(f"Number of tickers to screen for {strategy}: {count}")
+    for strategy, count in already_screened.items():
+        print(f"Number of tickers already screened for {strategy}: {count}")
+
+    # Track inserted records and batches
+    batched_data = {strategy: [] for strategy in tickers_to_screen}
+    total_inserted = {strategy: 0 for strategy in tickers_to_screen}
+    
+    # Initialize progress counters
+    progress_counter = {strategy: 0 for strategy in tickers_to_screen}
+    total_processed = 0
+
+    def batch_upsert(strategy, batch):
+        if batch:
+            db.upsert_data_to_supabase(strategy, batch)
+            total_inserted[strategy] += len(batch)
+            print(f"Upserted {len(batch)} records to {strategy}")
+            batch.clear()
+
+    # Fetch data and analyze tickers
+    total_tickers = set(sum(tickers_to_screen.values(), []))
+    total_tickers_count = len(total_tickers)
+
+    for idx, ticker in enumerate(total_tickers, start=1):
         try:
-            ticker_data = tg.fetch_stock_data(ticker)  # Fetch data synchronously
-            return ticker_data
-        except Exception as e:
-            print(f"❌ Failed to fetch data for {ticker}: {e}")
-            return None
-
-    # Concurrent analysis
-    def analyze_ticker(ticker, ticker_data):
-        nonlocal tickers_screened_total
-        ticker_processed = False
-
-        try:
-            for indicator, (get_dates_func, table_name) in {
-                "bull_appear": (ie.get_apex_bull_appear_dates, "apex_bull_appear"),
-                "bull_raging": (ie.get_apex_bull_raging_dates, "apex_bull_raging"),
-                "bear_appear": (ie.get_apex_bear_appear_dates, "apex_bear_appear"),
-                "bear_raging": (ie.get_apex_bear_raging_dates, "apex_bear_raging"),
+            ticker_data = tg.fetch_stock_data(ticker)
+            total_processed += 1
+            for strategy, (get_dates_func, table_name) in {
+                "apex_bull_appear": (ie.get_apex_bull_appear_dates, "apex_bull_appear"),
+                "apex_bull_raging": (ie.get_apex_bull_raging_dates, "apex_bull_raging"),
+                "apex_bear_appear": (ie.get_apex_bear_appear_dates, "apex_bear_appear"),
+                "apex_bear_raging": (ie.get_apex_bear_raging_dates, "apex_bear_raging")
             }.items():
-                if ticker in tickers_to_screen[indicator]:
-                    dates = get_dates_func(ticker_data)
-                    analysis_result = iu.get_analysis_results(dates, ticker_data)
-                    analysis_result = convert_to_serializable(analysis_result)
+                if ticker in tickers_to_screen[strategy]:
+                    dates = [date.strftime('%Y-%m-%d') for date in get_dates_func(ticker_data)]
+                    batched_data[table_name].append({
+                        "ticker": ticker,
+                        "dates": dates,
+                        "created_at": "now()"
+                    })
 
-                    # if analysis_result:
-                    db.upsert_data_to_supabase(
-                        table_name,
-                        {
-                            "ticker": ticker,
-                            "dates": dates,
-                            # "analysis": analysis_result,
-                            "created_at": "now()",
-                        },
-                    )
-                    print(f"Upserted {indicator} analysis for {ticker}")
-                    # else:
-                    # print(f"No {indicator} analysis to upsert for {ticker}")
+                    progress_counter[strategy] += 1
+                    
 
-                    with ticker_screened_lock:
-                        tickers_screened[indicator] += 1
-                        if not ticker_processed:
-                            tickers_screened_total += 1
-                            ticker_processed = True
+                    # Print progress for the strategy
+                    print(f"[{total_processed}/{total_tickers_count}] Processed ticker: {ticker} for {strategy} ({progress_counter[strategy]}/{to_screen_count[strategy]} tickers)")
+
+                    if len(batched_data[table_name]) >= 100:
+                        batch_upsert(table_name, batched_data[table_name])
 
         except Exception as e:
-            print(f"❌ Failed to process ticker {ticker} during analysis: {e}")
+            print(f"❌ Failed to fetch or process data for {ticker}: {e}")
 
-        # Print progress after every analysis
-        with ticker_screened_lock:
-            print(
-                f"Progress: {tickers_screened_total}/{total_unique_tickers_to_screen} tickers screened"
-            )
-            for key, count in tickers_screened.items():
-                print(
-                    f"Progress for {key.replace('_', ' ')}: {count}/{len(tickers_to_screen[key])} tickers screened"
-                )
+    # Final upsert for remaining batches
+    for strategy, batch in batched_data.items():
+        batch_upsert(strategy, batch)
 
-    # Fetch data synchronously and analyze concurrently
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        for ticker in set(sum(tickers_to_screen.values(), [])):
-            ticker_data = process_ticker_synchronously(
-                ticker
-            )  # Synchronously fetch data
-            if ticker_data is not None:
-                # Analyze ticker data concurrently
-                executor.submit(analyze_ticker, ticker, ticker_data)
-
-
-def convert_to_serializable(data):
-    if isinstance(data, dict):
-        return {k: convert_to_serializable(v) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [convert_to_serializable(i) for i in data]
-    elif isinstance(data, pd.Timestamp):
-        return data.isoformat()
-    elif isinstance(data, np.int64):
-        return int(data)
-    elif isinstance(data, np.float64):
-        return float(data)
-    else:
-        return data
+    # Print total records inserted for each strategy
+    for strategy, count in total_inserted.items():
+        print(f"Total inserted for {strategy}: {count}")
 
 
 calculate_and_save_indicator_results()
