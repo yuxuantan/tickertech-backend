@@ -27,37 +27,38 @@ def alert(indicator_name):
 
     # Filter and format the data
     filtered_tickers = []
-    for ticker in bull_raging_cache:
-        last_key = next(reversed(ticker["analysis"]), None)
-        if last_key:
-            last_key_date = datetime.strptime(last_key, '%Y-%m-%d')
-            # Calculate the entry date as 2 weekdays away from signal confirmed bar date because we are using 2D chart. 
-            entry_date = last_key_date
-            days_added = 0
-            while days_added < 2:
-                entry_date += timedelta(days=1)
-                if entry_date.weekday() < 5:  # Monday to Friday are 0-4
-                    days_added += 1
+    for row in bull_raging_cache:
+        # get last date in ticker["dates"]
+        if not row['dates']:
+            continue
+        entry_date = datetime.strptime(row['dates'][-1], '%Y-%m-%d')
+        # Calculate the entry date as 2 weekdays away from signal confirmed bar date because we are using 2D chart. 
+
+        days_added = 0
+        while days_added < 2:
+            entry_date += timedelta(days=1)
+            if entry_date.weekday() < 5:  # Monday to Friday are 0-4
+                days_added += 1
             
-            if entry_date > three_weekdays_ago:
-                filtered_tickers.append(ticker)
-                ticker_symbol = ticker.get('ticker', '?')
-                # entry_date = last_key if last_key else '?'
-                entry_close_price = ticker['analysis'][last_key].get('close', '?')
-                volume = ticker['analysis'][last_key].get('volume', '?')
+        if entry_date > three_weekdays_ago:
+            filtered_tickers.append(row)
+            ticker_symbol = row["ticker"]
+            data = tg.fetch_stock_data(ticker_symbol)
+            entry_close_price = data.loc[entry_date].get('Close', '?')
+            volume = data.loc[entry_date].get('Volume', '?')
 
-                # Format entry close price and volume
-                if entry_close_price != '?':
-                    entry_close_price = round(float(entry_close_price), 2)
+            # Format entry close price and volume
+            if entry_close_price != '?':
+                entry_close_price = round(float(entry_close_price), 2)
 
-                if volume != '?':
-                    volume = round(float(volume))
+            if volume != '?':
+                volume = round(float(volume))
 
-                if entry_close_price == '?' or volume == '?' or entry_close_price < 20 or volume < 1000000:
-                    continue
+            if entry_close_price == '?' or volume == '?' or entry_close_price < 20 or volume < 1000000:
+                continue
 
-                # Add row to the table
-                results_output += f"✅ *{ticker_symbol}* | {str(entry_date).split(' ')[0]} | {str(tg.fetch_next_earnings_date(ticker_symbol)).split(' ')[0]}\n"
+            # Add row to the table
+            results_output += f"✅ *{ticker_symbol}* | {str(entry_date).split(' ')[0]} | {str(tg.fetch_next_earnings_date(ticker_symbol)).split(' ')[0]}\n"
 
     # Check if there are results
     if not filtered_tickers:

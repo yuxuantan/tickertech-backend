@@ -508,7 +508,7 @@ def get_apex_bull_appear_dates(data):
 
         # Get date index 1 year before date, approximately 126 indexes before
         start_index = max(0, wallaby_pos - 126)
-        end_index = kangaroo_pos - 1
+        end_index = kangaroo_pos - 3
 
         active_bear_traps = find_bear_traps(
             potential_bear_traps,
@@ -594,7 +594,7 @@ def get_apex_bull_appear_dates(data):
         if not any_bar_went_below_kangaroo or not bullish_bar_went_back_up_to_range:
             continue
 
-        # Condition 4: active bear trap must be taken between K-1 and K+5
+        # Condition 4: active bear trap must be taken between K-3 and K+5
         # OR if K-K+5 touches 20sma, 50 sma or 200 sma from below
         for i in range(0, 6):
             curr_pos = end_index + i
@@ -671,7 +671,7 @@ def get_apex_bear_appear_dates(data):
 
         # Get date index 1 year before date, approximately 126 indexes before
         start_index = max(0, wallaby_pos - 126)
-        end_index = kangaroo_pos - 1
+        end_index = kangaroo_pos - 3
 
         active_bull_traps = find_bull_traps(
             potential_bull_traps,
@@ -757,7 +757,7 @@ def get_apex_bear_appear_dates(data):
         if not any_bar_went_above_kangaroo or not bearish_bar_went_back_down_to_range:
             continue
 
-        # Condition 4: active bear trap must be taken between K-1 and K+5
+        # Condition 4: active bear trap must be taken between K-3 and K+5
         # OR if K-K+5 touches 20sma, 50 sma or 200 sma from below
         for i in range(0, 6):
             curr_pos = end_index + i
