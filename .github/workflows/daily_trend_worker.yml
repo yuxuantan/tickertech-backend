@@ -1,0 +1,59 @@
+name: Calculate Trends
+
+on:
+  schedule:
+    - cron: '0 21 * * 0-4'  # 5AM Mon - Thu
+  workflow_dispatch:         # Allow manual triggering of the workflow
+
+jobs:
+  calculate_and_insert:
+    runs-on: ubuntu-latest
+    env:
+      TELEGRAM_BOT_API_TOKEN: ${{ secrets.TELEGRAM_BOT_API_TOKEN }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+    steps:
+      - name: Checkout repo content
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run first calculate_and_save script
+        run: |
+          python -u calculate_apex_trends.py
+
+
+  calculate_and_insert_remaining_then_alert_step:
+    if: ${{ always() }} #trigger regardless whether previous is success
+    needs: calculate_and_insert
+    runs-on: ubuntu-latest
+    env:
+      TELEGRAM_BOT_API_TOKEN: ${{ secrets.TELEGRAM_BOT_API_TOKEN }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+    steps:
+      - name: Checkout repo content
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run alert_all script
+        run: |
+          python -u calculate_apex_trends.py
+          python -u alert_all.py

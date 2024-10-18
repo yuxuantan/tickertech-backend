@@ -1,4 +1,4 @@
-name: Calculate, Save and Alert
+name: Calculate Appear
 
 on:
   schedule:
@@ -28,7 +28,7 @@ jobs:
 
       - name: Run first calculate_and_save script
         run: |
-          python -u calculate_and_save_indicator_results.py
+          python -u calculate_apex_appear.py
 
 
   calculate_and_insert_remaining_then_alert_step:
@@ -55,5 +55,5 @@ jobs:
 
       - name: Run alert_all script
         run: |
-          python -u calculate_and_save_indicator_results.py
+          python -u calculate_apex_appear.py
           python -u alert_all.py

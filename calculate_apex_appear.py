@@ -11,9 +11,7 @@ def calculate_and_save_indicator_results():
     # Fetch cached data from Supabase
     cached_data = {
         "apex_bull_appear": db.fetch_cached_data_from_supabase("apex_bull_appear"),
-        "apex_bull_raging": db.fetch_cached_data_from_supabase("apex_bull_raging"),
-        "apex_bear_appear": db.fetch_cached_data_from_supabase("apex_bear_appear"),
-        "apex_bear_raging": db.fetch_cached_data_from_supabase("apex_bear_raging")
+        "apex_bear_appear": db.fetch_cached_data_from_supabase("apex_bear_appear")
     }
 
     # Filter tickers based on cache and current day
@@ -68,9 +66,7 @@ def calculate_and_save_indicator_results():
             total_processed += 1
             for strategy, (get_dates_func, table_name) in {
                 "apex_bull_appear": (ie.get_apex_bull_appear_dates, "apex_bull_appear"),
-                "apex_bull_raging": (ie.get_apex_bull_raging_dates, "apex_bull_raging"),
-                "apex_bear_appear": (ie.get_apex_bear_appear_dates, "apex_bear_appear"),
-                "apex_bear_raging": (ie.get_apex_bear_raging_dates, "apex_bear_raging")
+                "apex_bear_appear": (ie.get_apex_bear_appear_dates, "apex_bear_appear")
             }.items():
                 if ticker in tickers_to_screen[strategy]:
                     dates = [date.strftime('%Y-%m-%d') for date in get_dates_func(ticker_data)]
