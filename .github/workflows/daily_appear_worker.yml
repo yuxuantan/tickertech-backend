@@ -55,5 +55,5 @@ jobs:
 
       - name: Run alert_all script
         run: |
-          python -u calculate_apex_appear.py
-          python -u alert_all.py
+          python -u calculate_indicator_and_save.py apex_bull_appear apex_bear_appear
+          python -u alert_all.py apex_bull_appear apex_bear_appear

@@ -2,10 +2,11 @@ from datetime import datetime, timedelta, timezone
 import utils.telegram_controller as tc
 import utils.supabase as db
 import utils.ticker_getter as tg
+import sys
 
 chat_ids = [
     27392018,  # me
-    432502167 # rainbow
+    # 432502167 # rainbow
 ]
 
 def alert(indicator_name):
@@ -82,7 +83,5 @@ def alert(indicator_name):
 
 if __name__ == "__main__":
     # Send messages for each indicator
-    tc.send_message(chat_ids, message=alert('apex_bull_raging'))
-    tc.send_message(chat_ids, message=alert('apex_bull_appear'))
-    tc.send_message(chat_ids, message=alert('apex_bear_raging'))
-    tc.send_message(chat_ids, message=alert('apex_bear_appear'))
+    for input_arg in sys.argv[1:]:
+        tc.send_message(chat_ids, message=alert(input_arg))

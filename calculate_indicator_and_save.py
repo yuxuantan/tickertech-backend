@@ -3,16 +3,21 @@ import pytz
 import utils.ticker_getter as tg
 import utils.supabase as db
 import utils.indicators as ie
-
+import sys
 
 def calculate_and_save_indicator_results():
     stock_list = tg.get_all_tickers()
 
     # Fetch cached data from Supabase
-    cached_data = {
-        "apex_bull_appear": db.fetch_cached_data_from_supabase("apex_bull_appear"),
-        "apex_bear_appear": db.fetch_cached_data_from_supabase("apex_bear_appear")
-    }
+    # cached_data = {
+    #     "apex_bull_appear": db.fetch_cached_data_from_supabase("apex_bull_appear"),
+    #     "apex_bear_appear": db.fetch_cached_data_from_supabase("apex_bear_appear")
+    # }
+    
+    # for each argument, fetch the cached data from Supabase
+    cached_data = {}
+    for arg in sys.argv[1:]:
+        cached_data[arg] = db.fetch_cached_data_from_supabase(arg)
 
     # Filter tickers based on cache and current day
     def filter_tickers(cache):
@@ -64,10 +69,21 @@ def calculate_and_save_indicator_results():
         try:
             ticker_data = tg.fetch_stock_data(ticker)
             total_processed += 1
-            for strategy, (get_dates_func, table_name) in {
+            strategies = {
                 "apex_bull_appear": (ie.get_apex_bull_appear_dates, "apex_bull_appear"),
-                "apex_bear_appear": (ie.get_apex_bear_appear_dates, "apex_bear_appear")
-            }.items():
+                "apex_bear_appear": (ie.get_apex_bear_appear_dates, "apex_bear_appear"),
+                "apex_bull_raging": (ie.get_apex_bull_raging_dates, "apex_bull_raging"),
+                "apex_bear_raging": (ie.get_apex_bear_raging_dates, "apex_bear_raging"),
+                "apex_uptrend": (ie.get_apex_uptrend_dates, "apex_uptrend"),
+                "apex_downtrend": (ie.get_apex_downtrend_dates, "apex_downtrend")
+            }
+
+            for arg in sys.argv[1:]:
+                if arg not in strategies:
+                    print(f"Warning: No strategy found for {arg}")
+                    continue
+
+                get_dates_func, table_name = strategies[arg]
                 if ticker in tickers_to_screen[strategy]:
                     dates = [date.strftime('%Y-%m-%d') for date in get_dates_func(ticker_data)]
                     batched_data[table_name].append({
