@@ -16,8 +16,9 @@ from utils.indicator_helpers import (
 # logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 
 
-def get_apex_bull_raging_dates(data):
-    data = get_2day_aggregated_data(data)
+def get_apex_bull_raging_dates(data, custom_aggregate_2days = True):
+    if custom_aggregate_2days:
+        data = get_2day_aggregated_data(data)
 
     high_inflexion_points = get_high_inflexion_points(data)
     potential_bear_traps = get_low_inflexion_points(data)
@@ -125,8 +126,10 @@ def get_apex_bull_raging_dates(data):
     return bull_raging_dates
 
 
-def get_apex_bear_raging_dates(data):
-    data = get_2day_aggregated_data(data)
+def get_apex_bear_raging_dates(data, custom_aggregate_2days = True):
+
+    if custom_aggregate_2days:
+        data = get_2day_aggregated_data(data)
 
     low_inflexion_points = get_low_inflexion_points(data)
     potential_bull_traps = get_high_inflexion_points(data)
@@ -235,37 +238,41 @@ def get_apex_bear_raging_dates(data):
 
 
 # @st.cache_data(ttl="1d")
-def get_apex_uptrend_dates(data):
-    agg_data = get_2day_aggregated_data(data)
-    agg_data["SMA_50"] = agg_data["Close"].rolling(window=50).mean()
-    agg_data["SMA_200"] = agg_data["Close"].rolling(window=200).mean()
+def get_apex_uptrend_dates(data, custom_aggregate_2days = True):
+
+    if custom_aggregate_2days:
+        data = get_2day_aggregated_data(data)
+
+    data = get_2day_aggregated_data(data)
+    data["SMA_50"] = data["Close"].rolling(window=50).mean()
+    data["SMA_200"] = data["Close"].rolling(window=200).mean()
 
     high_inflexion_points = []
     low_inflexion_points = []
-    for i in range(1, len(agg_data) - 2):
+    for i in range(1, len(data) - 2):
         if (
-            agg_data["High"].iloc[i - 1]
-            < agg_data["High"].iloc[i]
-            > agg_data["High"].iloc[i + 1]
+            data["High"].iloc[i - 1]
+            < data["High"].iloc[i]
+            > data["High"].iloc[i + 1]
         ) and (
-            agg_data["High"].iloc[i - 2]
-            < agg_data["High"].iloc[i]
-            > agg_data["High"].iloc[i + 2]
+            data["High"].iloc[i - 2]
+            < data["High"].iloc[i]
+            > data["High"].iloc[i + 2]
         ):
-            high_inflexion_points.append(agg_data.index[i])
+            high_inflexion_points.append(data.index[i])
         elif (
-            agg_data["Low"].iloc[i - 1]
-            > agg_data["Low"].iloc[i]
-            < agg_data["Low"].iloc[i + 1]
+            data["Low"].iloc[i - 1]
+            > data["Low"].iloc[i]
+            < data["Low"].iloc[i + 1]
         ) and (
-            agg_data["Low"].iloc[i - 2]
-            > agg_data["Low"].iloc[i]
-            < agg_data["Low"].iloc[i + 2]
+            data["Low"].iloc[i - 2]
+            > data["Low"].iloc[i]
+            < data["Low"].iloc[i + 2]
         ):
-            low_inflexion_points.append(agg_data.index[i])
+            low_inflexion_points.append(data.index[i])
 
     inflexion_points = sorted(high_inflexion_points + low_inflexion_points)
-    inflexion_data = agg_data.loc[inflexion_points, ["High", "Low"]]
+    inflexion_data = data.loc[inflexion_points, ["High", "Low"]]
     inflexion_data = pd.DataFrame(inflexion_data)
 
     uptrend_dates = []
@@ -314,28 +321,28 @@ def get_apex_uptrend_dates(data):
 
         # get the higher and lower value of open and close for each point
         point_a_high_open_close = max(
-            agg_data.loc[point_a.name, "Open"], agg_data.loc[point_a.name, "Close"]
+            data.loc[point_a.name, "Open"], data.loc[point_a.name, "Close"]
         )
         point_a_low_open_close = min(
-            agg_data.loc[point_a.name, "Open"], agg_data.loc[point_a.name, "Close"]
+            data.loc[point_a.name, "Open"], data.loc[point_a.name, "Close"]
         )
         point_b_high_open_close = max(
-            agg_data.loc[point_b.name, "Open"], agg_data.loc[point_b.name, "Close"]
+            data.loc[point_b.name, "Open"], data.loc[point_b.name, "Close"]
         )
         point_b_low_open_close = min(
-            agg_data.loc[point_b.name, "Open"], agg_data.loc[point_b.name, "Close"]
+            data.loc[point_b.name, "Open"], data.loc[point_b.name, "Close"]
         )
         point_c_high_open_close = max(
-            agg_data.loc[point_c.name, "Open"], agg_data.loc[point_c.name, "Close"]
+            data.loc[point_c.name, "Open"], data.loc[point_c.name, "Close"]
         )
         point_c_low_open_close = min(
-            agg_data.loc[point_c.name, "Open"], agg_data.loc[point_c.name, "Close"]
+            data.loc[point_c.name, "Open"], data.loc[point_c.name, "Close"]
         )
         point_d_high_open_close = max(
-            agg_data.loc[point_d.name, "Open"], agg_data.loc[point_d.name, "Close"]
+            data.loc[point_d.name, "Open"], data.loc[point_d.name, "Close"]
         )
         point_d_low_open_close = min(
-            agg_data.loc[point_d.name, "Open"], agg_data.loc[point_d.name, "Close"]
+            data.loc[point_d.name, "Open"], data.loc[point_d.name, "Close"]
         )
 
         # Check for lightning. must start with high inflexion point, C must be lower than A ,   D must be lower than B and cross back to B (assume it just have to reverse in the direction, but havent reach B)
@@ -360,19 +367,19 @@ def get_apex_uptrend_dates(data):
 
         num_bars_above_sma_50 = 0
         num_bars_above_sma_200 = 0
-        # loop through each bar between point a and d in agg_data
+        # loop through each bar between point a and d in data
         for i in range(
-            agg_data.index.get_loc(point_a.name),
-            agg_data.index.get_loc(point_d.name) + 1,
+            data.index.get_loc(point_a.name),
+            data.index.get_loc(point_d.name) + 1,
         ):
             if (
-                agg_data.loc[agg_data.index[i], "Close"]
-                > agg_data.loc[agg_data.index[i], "SMA_50"]
+                data.loc[data.index[i], "Close"]
+                > data.loc[data.index[i], "SMA_50"]
             ):
                 num_bars_above_sma_50 += 1
             if (
-                agg_data.loc[agg_data.index[i], "Close"]
-                > agg_data.loc[agg_data.index[i], "SMA_200"]
+                data.loc[data.index[i], "Close"]
+                > data.loc[data.index[i], "SMA_200"]
             ):
                 num_bars_above_sma_200 += 1
 
@@ -444,34 +451,34 @@ def get_apex_uptrend_dates(data):
         point_e = inflexion_data.loc[point_e]
 
         point_a_high_open_close = max(
-            agg_data.loc[point_a.name, "Open"], agg_data.loc[point_a.name, "Close"]
+            data.loc[point_a.name, "Open"], data.loc[point_a.name, "Close"]
         )
         point_a_low_open_close = min(
-            agg_data.loc[point_a.name, "Open"], agg_data.loc[point_a.name, "Close"]
+            data.loc[point_a.name, "Open"], data.loc[point_a.name, "Close"]
         )
         point_b_high_open_close = max(
-            agg_data.loc[point_b.name, "Open"], agg_data.loc[point_b.name, "Close"]
+            data.loc[point_b.name, "Open"], data.loc[point_b.name, "Close"]
         )
         point_b_low_open_close = min(
-            agg_data.loc[point_b.name, "Open"], agg_data.loc[point_b.name, "Close"]
+            data.loc[point_b.name, "Open"], data.loc[point_b.name, "Close"]
         )
         point_c_high_open_close = max(
-            agg_data.loc[point_c.name, "Open"], agg_data.loc[point_c.name, "Close"]
+            data.loc[point_c.name, "Open"], data.loc[point_c.name, "Close"]
         )
         point_c_low_open_close = min(
-            agg_data.loc[point_c.name, "Open"], agg_data.loc[point_c.name, "Close"]
+            data.loc[point_c.name, "Open"], data.loc[point_c.name, "Close"]
         )
         point_d_high_open_close = max(
-            agg_data.loc[point_d.name, "Open"], agg_data.loc[point_d.name, "Close"]
+            data.loc[point_d.name, "Open"], data.loc[point_d.name, "Close"]
         )
         point_d_low_open_close = min(
-            agg_data.loc[point_d.name, "Open"], agg_data.loc[point_d.name, "Close"]
+            data.loc[point_d.name, "Open"], data.loc[point_d.name, "Close"]
         )
         point_e_high_open_close = max(
-            agg_data.loc[point_e.name, "Open"], agg_data.loc[point_e.name, "Close"]
+            data.loc[point_e.name, "Open"], data.loc[point_e.name, "Close"]
         )
         point_e_low_open_close = min(
-            agg_data.loc[point_e.name, "Open"], agg_data.loc[point_e.name, "Close"]
+            data.loc[point_e.name, "Open"], data.loc[point_e.name, "Close"]
         )
 
         # Check for M formation. must start with low inflexion point, D must be higher than B, and cross back to C to reach E (above A)
@@ -506,19 +513,19 @@ def get_apex_uptrend_dates(data):
 
         num_bars_above_sma_50 = 0
         num_bars_above_sma_200 = 0
-        # loop through each bar between point a and d in agg_data
+        # loop through each bar between point a and d in data
         for i in range(
-            agg_data.index.get_loc(point_a.name),
-            agg_data.index.get_loc(point_e.name) + 1,
+            data.index.get_loc(point_a.name),
+            data.index.get_loc(point_e.name) + 1,
         ):
             if (
-                agg_data.loc[agg_data.index[i], "Close"]
-                > agg_data.loc[agg_data.index[i], "SMA_50"]
+                data.loc[data.index[i], "Close"]
+                > data.loc[data.index[i], "SMA_50"]
             ):
                 num_bars_above_sma_50 += 1
             if (
-                agg_data.loc[agg_data.index[i], "Close"]
-                > agg_data.loc[agg_data.index[i], "SMA_200"]
+                data.loc[data.index[i], "Close"]
+                > data.loc[data.index[i], "SMA_200"]
             ):
                 num_bars_above_sma_200 += 1
 
@@ -548,38 +555,40 @@ def get_apex_uptrend_dates(data):
 
 
 # @st.cache_data(ttl="1d")
-def get_apex_downtrend_dates(data):
-    agg_data = get_2day_aggregated_data(data)
-    agg_data["SMA_20"] = agg_data["Close"].rolling(window=20).mean()
-    agg_data["SMA_50"] = agg_data["Close"].rolling(window=50).mean()
-    agg_data["SMA_200"] = agg_data["Close"].rolling(window=200).mean()
+def get_apex_downtrend_dates(data, custom_aggregate_2days = True):
+    if custom_aggregate_2days:
+        data = get_2day_aggregated_data(data)
+
+    data["SMA_20"] = data["Close"].rolling(window=20).mean()
+    data["SMA_50"] = data["Close"].rolling(window=50).mean()
+    data["SMA_200"] = data["Close"].rolling(window=200).mean()
 
     high_inflexion_points = []
     low_inflexion_points = []
-    for i in range(1, len(agg_data) - 2):
+    for i in range(1, len(data) - 2):
         if (
-            agg_data["High"].iloc[i - 1]
-            < agg_data["High"].iloc[i]
-            > agg_data["High"].iloc[i + 1]
+            data["High"].iloc[i - 1]
+            < data["High"].iloc[i]
+            > data["High"].iloc[i + 1]
         ) and (
-            agg_data["High"].iloc[i - 2]
-            < agg_data["High"].iloc[i]
-            > agg_data["High"].iloc[i + 2]
+            data["High"].iloc[i - 2]
+            < data["High"].iloc[i]
+            > data["High"].iloc[i + 2]
         ):
-            high_inflexion_points.append(agg_data.index[i])
+            high_inflexion_points.append(data.index[i])
         elif (
-            agg_data["Low"].iloc[i - 1]
-            > agg_data["Low"].iloc[i]
-            < agg_data["Low"].iloc[i + 1]
+            data["Low"].iloc[i - 1]
+            > data["Low"].iloc[i]
+            < data["Low"].iloc[i + 1]
         ) and (
-            agg_data["Low"].iloc[i - 2]
-            > agg_data["Low"].iloc[i]
-            < agg_data["Low"].iloc[i + 2]
+            data["Low"].iloc[i - 2]
+            > data["Low"].iloc[i]
+            < data["Low"].iloc[i + 2]
         ):
-            low_inflexion_points.append(agg_data.index[i])
+            low_inflexion_points.append(data.index[i])
 
     inflexion_points = sorted(high_inflexion_points + low_inflexion_points)
-    inflexion_data = agg_data.loc[inflexion_points, ["High", "Low"]]
+    inflexion_data = data.loc[inflexion_points, ["High", "Low"]]
     inflexion_data = pd.DataFrame(inflexion_data)
 
     downtrend_dates = []
@@ -623,28 +632,28 @@ def get_apex_downtrend_dates(data):
         point_d = inflexion_data.loc[point_d]
 
         point_a_high_open_close = max(
-            agg_data.loc[point_a.name, "Open"], agg_data.loc[point_a.name, "Close"]
+            data.loc[point_a.name, "Open"], data.loc[point_a.name, "Close"]
         )
         point_a_low_open_close = min(
-            agg_data.loc[point_a.name, "Open"], agg_data.loc[point_a.name, "Close"]
+            data.loc[point_a.name, "Open"], data.loc[point_a.name, "Close"]
         )
         point_b_high_open_close = max(
-            agg_data.loc[point_b.name, "Open"], agg_data.loc[point_b.name, "Close"]
+            data.loc[point_b.name, "Open"], data.loc[point_b.name, "Close"]
         )
         point_b_low_open_close = min(
-            agg_data.loc[point_b.name, "Open"], agg_data.loc[point_b.name, "Close"]
+            data.loc[point_b.name, "Open"], data.loc[point_b.name, "Close"]
         )
         point_c_high_open_close = max(
-            agg_data.loc[point_c.name, "Open"], agg_data.loc[point_c.name, "Close"]
+            data.loc[point_c.name, "Open"], data.loc[point_c.name, "Close"]
         )
         point_c_low_open_close = min(
-            agg_data.loc[point_c.name, "Open"], agg_data.loc[point_c.name, "Close"]
+            data.loc[point_c.name, "Open"], data.loc[point_c.name, "Close"]
         )
         point_d_high_open_close = max(
-            agg_data.loc[point_d.name, "Open"], agg_data.loc[point_d.name, "Close"]
+            data.loc[point_d.name, "Open"], data.loc[point_d.name, "Close"]
         )
         point_d_low_open_close = min(
-            agg_data.loc[point_d.name, "Open"], agg_data.loc[point_d.name, "Close"]
+            data.loc[point_d.name, "Open"], data.loc[point_d.name, "Close"]
         )
 
         # Check for N. must start with low inflexion point, C must be higher than A , D must be higher than B and cross back to B (assume it just have to reverse in the direction, but havent reach B)
@@ -668,26 +677,26 @@ def get_apex_downtrend_dates(data):
         # Between A to D, Check if at least 5 bars are FULLY below sma50
 
         num_bars_below_sma_50 = 0
-        # loop through each bar between point a and d in agg_data
+        # loop through each bar between point a and d in data
         for i in range(
-            agg_data.index.get_loc(point_a.name),
-            agg_data.index.get_loc(point_d.name) + 1,
+            data.index.get_loc(point_a.name),
+            data.index.get_loc(point_d.name) + 1,
         ):
             # check if sma 200 is between sma 20 and sma 50, if between, then it is invalid N formation
             if (
-                agg_data.loc[agg_data.index[i], "SMA_50"]
-                > agg_data.loc[agg_data.index[i], "SMA_200"]
-                > agg_data.loc[agg_data.index[i], "SMA_20"]
-                or agg_data.loc[agg_data.index[i], "SMA_50"]
-                < agg_data.loc[agg_data.index[i], "SMA_200"]
-                < agg_data.loc[agg_data.index[i], "SMA_20"]
+                data.loc[data.index[i], "SMA_50"]
+                > data.loc[data.index[i], "SMA_200"]
+                > data.loc[data.index[i], "SMA_20"]
+                or data.loc[data.index[i], "SMA_50"]
+                < data.loc[data.index[i], "SMA_200"]
+                < data.loc[data.index[i], "SMA_20"]
             ):
                 logging.info("❌ sma200 is between sma20 and sma50")
                 continue
 
             if (
-                agg_data.loc[agg_data.index[i], "Close"]
-                < agg_data.loc[agg_data.index[i], "SMA_50"]
+                data.loc[data.index[i], "Close"]
+                < data.loc[data.index[i], "SMA_50"]
             ):
                 num_bars_below_sma_50 += 1
 
@@ -757,34 +766,34 @@ def get_apex_downtrend_dates(data):
         point_e = inflexion_data.loc[point_e]
 
         point_a_high_open_close = max(
-            agg_data.loc[point_a.name, "Open"], agg_data.loc[point_a.name, "Close"]
+            data.loc[point_a.name, "Open"], data.loc[point_a.name, "Close"]
         )
         point_a_low_open_close = min(
-            agg_data.loc[point_a.name, "Open"], agg_data.loc[point_a.name, "Close"]
+            data.loc[point_a.name, "Open"], data.loc[point_a.name, "Close"]
         )
         point_b_high_open_close = max(
-            agg_data.loc[point_b.name, "Open"], agg_data.loc[point_b.name, "Close"]
+            data.loc[point_b.name, "Open"], data.loc[point_b.name, "Close"]
         )
         point_b_low_open_close = min(
-            agg_data.loc[point_b.name, "Open"], agg_data.loc[point_b.name, "Close"]
+            data.loc[point_b.name, "Open"], data.loc[point_b.name, "Close"]
         )
         point_c_high_open_close = max(
-            agg_data.loc[point_c.name, "Open"], agg_data.loc[point_c.name, "Close"]
+            data.loc[point_c.name, "Open"], data.loc[point_c.name, "Close"]
         )
         point_c_low_open_close = min(
-            agg_data.loc[point_c.name, "Open"], agg_data.loc[point_c.name, "Close"]
+            data.loc[point_c.name, "Open"], data.loc[point_c.name, "Close"]
         )
         point_d_high_open_close = max(
-            agg_data.loc[point_d.name, "Open"], agg_data.loc[point_d.name, "Close"]
+            data.loc[point_d.name, "Open"], data.loc[point_d.name, "Close"]
         )
         point_d_low_open_close = min(
-            agg_data.loc[point_d.name, "Open"], agg_data.loc[point_d.name, "Close"]
+            data.loc[point_d.name, "Open"], data.loc[point_d.name, "Close"]
         )
         point_e_high_open_close = max(
-            agg_data.loc[point_e.name, "Open"], agg_data.loc[point_e.name, "Close"]
+            data.loc[point_e.name, "Open"], data.loc[point_e.name, "Close"]
         )
         point_e_low_open_close = min(
-            agg_data.loc[point_e.name, "Open"], agg_data.loc[point_e.name, "Close"]
+            data.loc[point_e.name, "Open"], data.loc[point_e.name, "Close"]
         )
 
 
@@ -820,26 +829,26 @@ def get_apex_downtrend_dates(data):
 
         num_bars_below_sma_50 = 0
 
-        # loop through each bar between point a and e in agg_data
+        # loop through each bar between point a and e in data
         for i in range(
-            agg_data.index.get_loc(point_a.name),
-            agg_data.index.get_loc(point_e.name) + 1,
+            data.index.get_loc(point_a.name),
+            data.index.get_loc(point_e.name) + 1,
         ):
             # check if sma 200 is between sma 20 and sma 50, if between, then it is invalid N formation
             if (
-                agg_data.loc[agg_data.index[i], "SMA_50"]
-                > agg_data.loc[agg_data.index[i], "SMA_200"]
-                > agg_data.loc[agg_data.index[i], "SMA_20"]
-                or agg_data.loc[agg_data.index[i], "SMA_50"]
-                < agg_data.loc[agg_data.index[i], "SMA_200"]
-                < agg_data.loc[agg_data.index[i], "SMA_20"]
+                data.loc[data.index[i], "SMA_50"]
+                > data.loc[data.index[i], "SMA_200"]
+                > data.loc[data.index[i], "SMA_20"]
+                or data.loc[data.index[i], "SMA_50"]
+                < data.loc[data.index[i], "SMA_200"]
+                < data.loc[data.index[i], "SMA_20"]
             ):
                 logging.info("❌ sma200 is between sma20 and sma50")
                 continue
 
             if (
-                agg_data.loc[agg_data.index[i], "Close"]
-                < agg_data.loc[agg_data.index[i], "SMA_50"]
+                data.loc[data.index[i], "Close"]
+                < data.loc[data.index[i], "SMA_50"]
             ):
                 num_bars_below_sma_50 += 1
             
@@ -868,28 +877,31 @@ def get_apex_downtrend_dates(data):
     return downtrend_dates
 
 
-def get_apex_bull_appear_dates(data):
-    aggregated_data = get_2day_aggregated_data(data)
+def get_apex_bull_appear_dates(data, custom_aggregate_2days = True):
 
-    if "Close" not in aggregated_data.columns:
+    if custom_aggregate_2days:
+        data = get_2day_aggregated_data(data)
+
+    if "Close" not in data.columns:
         # logging.info("The 'Close' column is missing from the data. Skipping...")
         return None
-    aggregated_data["SMA_20"] = aggregated_data["Close"].rolling(window=20).mean()
-    aggregated_data["SMA_50"] = aggregated_data["Close"].rolling(window=50).mean()
-    aggregated_data["SMA_200"] = aggregated_data["Close"].rolling(window=200).mean()
+    
+    data["SMA_20"] = data["Close"].rolling(window=20).mean()
+    data["SMA_50"] = data["Close"].rolling(window=50).mean()
+    data["SMA_200"] = data["Close"].rolling(window=200).mean()
 
     # Find dates where the high of the current day is lower than the high of the previous day = Kangaroo wallaby formation
-    condition = (aggregated_data["High"] < aggregated_data["High"].shift(1)) & (
-        aggregated_data["Low"] > aggregated_data["Low"].shift(1)
+    condition = (data["High"] < data["High"].shift(1)) & (
+        data["Low"] > data["Low"].shift(1)
     )
-    wallaby_dates = aggregated_data.index[condition]
+    wallaby_dates = data.index[condition]
 
     bull_appear_dates = []
-    potential_bear_traps = get_low_inflexion_points(aggregated_data)
+    potential_bear_traps = get_low_inflexion_points(data)
 
     for date in wallaby_dates:
         # logging.info(f"======{date}======")
-        wallaby_pos = aggregated_data.index.get_loc(date)
+        wallaby_pos = data.index.get_loc(date)
         kangaroo_pos = wallaby_pos - 1
 
         # Get date index 1 year before date, approximately 126 indexes before
@@ -898,8 +910,8 @@ def get_apex_bull_appear_dates(data):
 
         active_bear_traps = find_bear_traps(
             potential_bear_traps,
-            aggregated_data.index[start_index],
-            aggregated_data.index[end_index],
+            data.index[start_index],
+            data.index[end_index],
         )
 
         any_bar_went_below_kangaroo = False
@@ -907,9 +919,9 @@ def get_apex_bull_appear_dates(data):
 
         # Condition 1: 200 SMA should slope upwards
         if (
-            kangaroo_pos + 5 < len(aggregated_data)
-            and aggregated_data["SMA_200"].iloc[kangaroo_pos]
-            > aggregated_data["SMA_200"].iloc[kangaroo_pos + 5]
+            kangaroo_pos + 5 < len(data)
+            and data["SMA_200"].iloc[kangaroo_pos]
+            > data["SMA_200"].iloc[kangaroo_pos + 5]
         ):
             logging.info("Condition 1 not met: 200 SMA should slope upward")
             continue
@@ -920,16 +932,16 @@ def get_apex_bull_appear_dates(data):
         for i in range(1, 5):
             logging.info(f"Checking {i} days after wallaby date")
             target_pos = wallaby_pos + i
-            if target_pos >= len(aggregated_data):
+            if target_pos >= len(data):
                 break
 
-            curr_data = aggregated_data.iloc[target_pos]
-            curr_date = aggregated_data.index[target_pos]
+            curr_data = data.iloc[target_pos]
+            curr_date = data.index[target_pos]
 
             # if high is higher than kangaroo, exit
             if (
                 not any_bar_went_below_kangaroo
-                and curr_data["High"] > aggregated_data.iloc[kangaroo_pos]["High"]
+                and curr_data["High"] > data.iloc[kangaroo_pos]["High"]
             ):
                 logging.info("Exiting because high is higher than kangaroo")
                 break
@@ -937,7 +949,7 @@ def get_apex_bull_appear_dates(data):
             # Condition 2: Low below the low of the kangaroo wallaby,
             if (
                 not any_bar_went_below_kangaroo
-                and curr_data["Low"] < aggregated_data.iloc[kangaroo_pos]["Low"]
+                and curr_data["Low"] < data.iloc[kangaroo_pos]["Low"]
             ):
                 any_bar_went_below_kangaroo = True
                 logging.info("Condition 3 met: broke below kangaroo lows")
@@ -946,9 +958,9 @@ def get_apex_bull_appear_dates(data):
             if (
                 any_bar_went_below_kangaroo
                 and not bullish_bar_went_back_up_to_range
-                and aggregated_data.iloc[kangaroo_pos]["Low"]
+                and data.iloc[kangaroo_pos]["Low"]
                 <= curr_data["Close"]
-                <= aggregated_data.iloc[kangaroo_pos]["High"]
+                <= data.iloc[kangaroo_pos]["High"]
             ):
                 if (
                     curr_data["Open"]
@@ -971,9 +983,9 @@ def get_apex_bull_appear_dates(data):
         # OR if K-K+5 touches 20sma, 50 sma or 200 sma from below
         for i in range(0, 6):
             curr_pos = end_index + i
-            if curr_pos >= len(aggregated_data):
+            if curr_pos >= len(data):
                 break
-            curr_data = aggregated_data.iloc[curr_pos]
+            curr_data = data.iloc[curr_pos]
             logging.info(
                 f"Trying to find bear trap or touching of sma for {curr_data.name}"
             )
@@ -989,13 +1001,13 @@ def get_apex_bull_appear_dates(data):
                 i > 0  # only valid if K onwards touches sma (Try between low and close)
                 and (
                     curr_data["Low"]
-                    <= aggregated_data["SMA_20"].iloc[curr_pos]
+                    <= data["SMA_20"].iloc[curr_pos]
                     <= curr_data["High"]
                     or curr_data["Low"]
-                    <= aggregated_data["SMA_50"].iloc[curr_pos]
+                    <= data["SMA_50"].iloc[curr_pos]
                     <= curr_data["High"]
                     or curr_data["Low"]
-                    <= aggregated_data["SMA_200"].iloc[curr_pos]
+                    <= data["SMA_200"].iloc[curr_pos]
                     <= curr_data["High"]
                 )
             ):
@@ -1004,7 +1016,7 @@ def get_apex_bull_appear_dates(data):
                     f"Condition 5b met: touches SMA 20, 50 or 200: {curr_data['Low']}, {curr_data['High']}"
                 )
                 logging.info(
-                    f"SMAs are {aggregated_data["SMA_20"].iloc[curr_pos]}, {aggregated_data["SMA_50"].iloc[curr_pos]}, {aggregated_data["SMA_200"].iloc[curr_pos]}"
+                    f"SMAs are {data["SMA_20"].iloc[curr_pos]}, {data["SMA_50"].iloc[curr_pos]}, {data["SMA_200"].iloc[curr_pos]}"
                 )
             else:
                 continue
@@ -1022,28 +1034,30 @@ def get_apex_bull_appear_dates(data):
     return pd.DatetimeIndex(bull_appear_dates)
 
 
-def get_apex_bear_appear_dates(data):
-    aggregated_data = get_2day_aggregated_data(data)
+def get_apex_bear_appear_dates(data, custom_aggregate_2days = True):
 
-    if "Close" not in aggregated_data.columns:
+    if custom_aggregate_2days:
+        data = get_2day_aggregated_data(data)
+
+    if "Close" not in data.columns:
         # logging.info("The 'Close' column is missing from the data. Skipping...")
         return None
-    aggregated_data["SMA_20"] = aggregated_data["Close"].rolling(window=20).mean()
-    aggregated_data["SMA_50"] = aggregated_data["Close"].rolling(window=50).mean()
-    aggregated_data["SMA_200"] = aggregated_data["Close"].rolling(window=200).mean()
+    data["SMA_20"] = data["Close"].rolling(window=20).mean()
+    data["SMA_50"] = data["Close"].rolling(window=50).mean()
+    data["SMA_200"] = data["Close"].rolling(window=200).mean()
 
     # Find dates where the high of the current day is lower than the high of the previous day = Kangaroo wallaby formation
-    condition = (aggregated_data["High"] < aggregated_data["High"].shift(1)) & (
-        aggregated_data["Low"] > aggregated_data["Low"].shift(1)
+    condition = (data["High"] < data["High"].shift(1)) & (
+        data["Low"] > data["Low"].shift(1)
     )
-    wallaby_dates = aggregated_data.index[condition]
+    wallaby_dates = data.index[condition]
 
     bear_appear_dates = []
-    potential_bull_traps = get_high_inflexion_points(aggregated_data)
+    potential_bull_traps = get_high_inflexion_points(data)
 
     for date in wallaby_dates:
         # logging.info(f"======{date}======")
-        wallaby_pos = aggregated_data.index.get_loc(date)
+        wallaby_pos = data.index.get_loc(date)
         kangaroo_pos = wallaby_pos - 1
 
         # Get date index 1 year before date, approximately 126 indexes before
@@ -1052,8 +1066,8 @@ def get_apex_bear_appear_dates(data):
 
         active_bull_traps = find_bull_traps(
             potential_bull_traps,
-            aggregated_data.index[start_index],
-            aggregated_data.index[end_index],
+            data.index[start_index],
+            data.index[end_index],
         )
 
         any_bar_went_above_kangaroo = False
@@ -1061,9 +1075,9 @@ def get_apex_bear_appear_dates(data):
 
         # Condition 1: 20 SMA should slope downwards??
         if (
-            kangaroo_pos + 5 < len(aggregated_data)
-            and aggregated_data["SMA_20"].iloc[kangaroo_pos]
-            < aggregated_data["SMA_20"].iloc[kangaroo_pos + 5]
+            kangaroo_pos + 5 < len(data)
+            and data["SMA_20"].iloc[kangaroo_pos]
+            < data["SMA_20"].iloc[kangaroo_pos + 5]
         ):
             # logging.info("Condition 1 not met: 20 SMA should slope downwards")
             continue
@@ -1072,16 +1086,16 @@ def get_apex_bear_appear_dates(data):
 
         # Condition 2: Should be below 20 sma (roughly)
         if (
-            aggregated_data["High"].iloc[kangaroo_pos]
-            < aggregated_data["SMA_20"].iloc[kangaroo_pos]
+            data["High"].iloc[kangaroo_pos]
+            < data["SMA_20"].iloc[kangaroo_pos]
         ):
             pass
             # logging.info(
-            # f"Condition 2 met: K High is below 50 sma: {aggregated_data['Low'].iloc[kangaroo_pos]} {aggregated_data['SMA_50'].iloc[kangaroo_pos]}"
+            # f"Condition 2 met: K High is below 50 sma: {data['Low'].iloc[kangaroo_pos]} {data['SMA_50'].iloc[kangaroo_pos]}"
             # )
         else:
             # logging.info(
-            # f"Condition 2 not met: K High should be below 50 sma {aggregated_data['Low'].iloc[kangaroo_pos]} {aggregated_data['SMA_50'].iloc[kangaroo_pos]}"
+            # f"Condition 2 not met: K High should be below 50 sma {data['Low'].iloc[kangaroo_pos]} {data['SMA_50'].iloc[kangaroo_pos]}"
             # )
             continue
 
@@ -1089,16 +1103,16 @@ def get_apex_bear_appear_dates(data):
         for i in range(1, 5):
             # logging.info(f"Checking {i} days after wallaby date")
             target_pos = wallaby_pos + i
-            if target_pos >= len(aggregated_data):
+            if target_pos >= len(data):
                 break
 
-            curr_data = aggregated_data.iloc[target_pos]
-            curr_date = aggregated_data.index[target_pos]
+            curr_data = data.iloc[target_pos]
+            curr_date = data.index[target_pos]
 
             # if low is lower than kangaroo, exit
             if (
                 not any_bar_went_above_kangaroo
-                and curr_data["Low"] > aggregated_data.iloc[kangaroo_pos]["Low"]
+                and curr_data["Low"] > data.iloc[kangaroo_pos]["Low"]
             ):
                 # logging.info("Exiting because low is lower than kangaroo")
                 break
@@ -1106,7 +1120,7 @@ def get_apex_bear_appear_dates(data):
             # Condition 2: High above the high of the kangaroo wallaby,
             if (
                 not any_bar_went_above_kangaroo
-                and curr_data["High"] > aggregated_data.iloc[kangaroo_pos]["High"]
+                and curr_data["High"] > data.iloc[kangaroo_pos]["High"]
             ):
                 any_bar_went_above_kangaroo = True
                 # logging.info("Condition 3 met: broke above kangaroo highs")
@@ -1115,9 +1129,9 @@ def get_apex_bear_appear_dates(data):
             if (
                 any_bar_went_above_kangaroo
                 and not bearish_bar_went_back_down_to_range
-                and aggregated_data.iloc[kangaroo_pos]["Low"]
+                and data.iloc[kangaroo_pos]["Low"]
                 <= curr_data["Close"]
-                <= aggregated_data.iloc[kangaroo_pos]["High"]
+                <= data.iloc[kangaroo_pos]["High"]
             ):
                 if (
                     curr_data["Open"]
@@ -1138,9 +1152,9 @@ def get_apex_bear_appear_dates(data):
         # OR if K-K+5 touches 20sma, 50 sma or 200 sma from below
         for i in range(0, 6):
             curr_pos = end_index + i
-            if curr_pos >= len(aggregated_data):
+            if curr_pos >= len(data):
                 break
-            curr_data = aggregated_data.iloc[curr_pos]
+            curr_data = data.iloc[curr_pos]
             # logging.info(f"Trying to find bear trap or touching of sma for {curr_data.name}")
             if any(
                 trap[1] > curr_data["Low"] and trap[1] < curr_data["High"]
@@ -1154,13 +1168,13 @@ def get_apex_bear_appear_dates(data):
                 i > 0  # only valid if K onwards touches sma (Try between low and close)
                 and (
                     curr_data["Low"]
-                    <= aggregated_data["SMA_20"].iloc[curr_pos]
+                    <= data["SMA_20"].iloc[curr_pos]
                     <= curr_data["High"]
                     or curr_data["Low"]
-                    <= aggregated_data["SMA_50"].iloc[curr_pos]
+                    <= data["SMA_50"].iloc[curr_pos]
                     <= curr_data["High"]
                     or curr_data["Low"]
-                    <= aggregated_data["SMA_200"].iloc[curr_pos]
+                    <= data["SMA_200"].iloc[curr_pos]
                     <= curr_data["High"]
                 )
             ):
@@ -1168,7 +1182,7 @@ def get_apex_bear_appear_dates(data):
                 # logging.info(
                 #     f"Condition 5b met: touches SMA 20, 50 or 200: {curr_data['Low']}, {curr_data['High']}"
                 # )
-                # logging.info(f"SMAs are {aggregated_data["SMA_20"].iloc[curr_pos]}, {aggregated_data["SMA_50"].iloc[curr_pos]}, {aggregated_data["SMA_200"].iloc[curr_pos]}")
+                # logging.info(f"SMAs are {data["SMA_20"].iloc[curr_pos]}, {data["SMA_50"].iloc[curr_pos]}, {data["SMA_200"].iloc[curr_pos]}")
             else:
                 continue
 
@@ -1213,122 +1227,122 @@ def get_death_cross_sma_dates(data, short_window=50, long_window=200):
     return death_cross_dates
 
 
-def get_rsi_overbought_dates(data, threshold=70):
-    delta = data["Close"].diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.ewm(com=13, adjust=False).mean()
-    avg_loss = loss.ewm(com=13, adjust=False).mean()
-    rs = avg_gain / avg_loss
-    data["RSI"] = 100 - (100 / (1 + rs))
-    if data["RSI"].empty:
-        return False
-    overbought = data["RSI"] > threshold
-    overbought_dates = overbought[overbought].index
+# def get_rsi_overbought_dates(data, threshold=70):
+#     delta = data["Close"].diff()
+#     gain = delta.where(delta > 0, 0)
+#     loss = -delta.where(delta < 0, 0)
+#     avg_gain = gain.ewm(com=13, adjust=False).mean()
+#     avg_loss = loss.ewm(com=13, adjust=False).mean()
+#     rs = avg_gain / avg_loss
+#     data["RSI"] = 100 - (100 / (1 + rs))
+#     if data["RSI"].empty:
+#         return False
+#     overbought = data["RSI"] > threshold
+#     overbought_dates = overbought[overbought].index
 
-    return overbought_dates
-
-
-def get_rsi_oversold_dates(data, threshold=30):
-    delta = data["Close"].diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.ewm(com=13, adjust=False).mean()
-    avg_loss = loss.ewm(com=13, adjust=False).mean()
-    rs = avg_gain / avg_loss
-    data["RSI"] = 100 - (100 / (1 + rs))
-
-    oversold = data["RSI"] < threshold
-    oversold_dates = oversold[oversold].index
-    return oversold_dates
+#     return overbought_dates
 
 
-def get_macd_bullish_dates(data, short_window=12, long_window=26, signal_window=9):
-    data["Short_EMA"] = data["Close"].ewm(span=short_window, adjust=False).mean()
-    data["Long_EMA"] = data["Close"].ewm(span=long_window, adjust=False).mean()
-    data["MACD"] = data["Short_EMA"] - data["Long_EMA"]
-    data["Signal_Line"] = data["MACD"].ewm(span=signal_window, adjust=False).mean()
+# def get_rsi_oversold_dates(data, threshold=30):
+#     delta = data["Close"].diff()
+#     gain = delta.where(delta > 0, 0)
+#     loss = -delta.where(delta < 0, 0)
+#     avg_gain = gain.ewm(com=13, adjust=False).mean()
+#     avg_loss = loss.ewm(com=13, adjust=False).mean()
+#     rs = avg_gain / avg_loss
+#     data["RSI"] = 100 - (100 / (1 + rs))
 
-    bullish = (data["MACD"] > data["Signal_Line"]) & (
-        data["MACD"].shift(1) <= data["Signal_Line"].shift(1)
-    )
-    bullish_dates = bullish[bullish].index
-    return bullish_dates
-
-
-def get_macd_bearish_dates(data, short_window=12, long_window=26, signal_window=9):
-    data["Short_EMA"] = data["Close"].ewm(span=short_window, adjust=False).mean()
-    data["Long_EMA"] = data["Close"].ewm(span=long_window, adjust=False).mean()
-    data["MACD"] = data["Short_EMA"] - data["Long_EMA"]
-    data["Signal_Line"] = data["MACD"].ewm(span=signal_window, adjust=False).mean()
-
-    bearish = (data["MACD"] < data["Signal_Line"]) & (
-        data["MACD"].shift(1) >= data["Signal_Line"].shift(1)
-    )
-    bearish_dates = bearish[bearish].index
-    return bearish_dates
+#     oversold = data["RSI"] < threshold
+#     oversold_dates = oversold[oversold].index
+#     return oversold_dates
 
 
-def get_bollinger_band_squeeze_dates(data, window=20, num_std_dev=2):
-    data["Middle_Band"] = data["Close"].rolling(window=window).mean()
-    data["Upper_Band"] = (
-        data["Middle_Band"] + num_std_dev * data["Close"].rolling(window=window).std()
-    )
-    data["Lower_Band"] = (
-        data["Middle_Band"] - num_std_dev * data["Close"].rolling(window=window).std()
-    )
+# def get_macd_bullish_dates(data, short_window=12, long_window=26, signal_window=9):
+#     data["Short_EMA"] = data["Close"].ewm(span=short_window, adjust=False).mean()
+#     data["Long_EMA"] = data["Close"].ewm(span=long_window, adjust=False).mean()
+#     data["MACD"] = data["Short_EMA"] - data["Long_EMA"]
+#     data["Signal_Line"] = data["MACD"].ewm(span=signal_window, adjust=False).mean()
 
-    squeeze = (data["Upper_Band"] - data["Lower_Band"]) / data["Middle_Band"] <= 0.05
-    squeeze_dates = squeeze[squeeze].index
-    return squeeze_dates
-
-
-def get_bollinger_band_expansion_dates(data, window=20, num_std_dev=2):
-    data["Middle_Band"] = data["Close"].rolling(window=window).mean()
-    data["Upper_Band"] = (
-        data["Middle_Band"] + num_std_dev * data["Close"].rolling(window=window).std()
-    )
-    data["Lower_Band"] = (
-        data["Middle_Band"] - num_std_dev * data["Close"].rolling(window=window).std()
-    )
-
-    expansion = (data["Upper_Band"] - data["Lower_Band"]) / data["Middle_Band"] >= 0.1
-    expansion_dates = expansion[expansion].index
-    return expansion_dates
+#     bullish = (data["MACD"] > data["Signal_Line"]) & (
+#         data["MACD"].shift(1) <= data["Signal_Line"].shift(1)
+#     )
+#     bullish_dates = bullish[bullish].index
+#     return bullish_dates
 
 
-def get_bollinger_band_breakout_dates(data, window=20, num_std_dev=2):
-    data["Middle_Band"] = data["Close"].rolling(window=window).mean()
-    data["Upper_Band"] = (
-        data["Middle_Band"] + num_std_dev * data["Close"].rolling(window=window).std()
-    )
-    data["Lower_Band"] = (
-        data["Middle_Band"] - num_std_dev * data["Close"].rolling(window=window).std()
-    )
+# def get_macd_bearish_dates(data, short_window=12, long_window=26, signal_window=9):
+#     data["Short_EMA"] = data["Close"].ewm(span=short_window, adjust=False).mean()
+#     data["Long_EMA"] = data["Close"].ewm(span=long_window, adjust=False).mean()
+#     data["MACD"] = data["Short_EMA"] - data["Long_EMA"]
+#     data["Signal_Line"] = data["MACD"].ewm(span=signal_window, adjust=False).mean()
 
-    breakout = data["Close"] > data["Upper_Band"]
-    breakout_dates = breakout[breakout].index
-    return breakout_dates
-
-
-def get_bollinger_band_pullback_dates(data, window=20, num_std_dev=2):
-    data["Middle_Band"] = data["Close"].rolling(window=window).mean()
-    data["Upper_Band"] = (
-        data["Middle_Band"] + num_std_dev * data["Close"].rolling(window=window).std()
-    )
-    data["Lower_Band"] = (
-        data["Middle_Band"] - num_std_dev * data["Close"].rolling(window=window).std()
-    )
-
-    pullback = data["Close"] < data["Lower_Band"]
-    pullback_dates = pullback[pullback].index
-    return pullback_dates
+#     bearish = (data["MACD"] < data["Signal_Line"]) & (
+#         data["MACD"].shift(1) >= data["Signal_Line"].shift(1)
+#     )
+#     bearish_dates = bearish[bearish].index
+#     return bearish_dates
 
 
-def get_volume_spike_dates(data, window=20, num_std_dev=2):
-    data["Volume_MA"] = data["Volume"].rolling(window=window).mean()
-    data["Volume_MA_std"] = data["Volume"].rolling(window=window).std()
+# def get_bollinger_band_squeeze_dates(data, window=20, num_std_dev=2):
+#     data["Middle_Band"] = data["Close"].rolling(window=window).mean()
+#     data["Upper_Band"] = (
+#         data["Middle_Band"] + num_std_dev * data["Close"].rolling(window=window).std()
+#     )
+#     data["Lower_Band"] = (
+#         data["Middle_Band"] - num_std_dev * data["Close"].rolling(window=window).std()
+#     )
 
-    spike = data["Volume"] > data["Volume_MA"] + num_std_dev * data["Volume_MA_std"]
-    spike_dates = spike[spike].index
-    return spike_dates
+#     squeeze = (data["Upper_Band"] - data["Lower_Band"]) / data["Middle_Band"] <= 0.05
+#     squeeze_dates = squeeze[squeeze].index
+#     return squeeze_dates
+
+
+# def get_bollinger_band_expansion_dates(data, window=20, num_std_dev=2):
+#     data["Middle_Band"] = data["Close"].rolling(window=window).mean()
+#     data["Upper_Band"] = (
+#         data["Middle_Band"] + num_std_dev * data["Close"].rolling(window=window).std()
+#     )
+#     data["Lower_Band"] = (
+#         data["Middle_Band"] - num_std_dev * data["Close"].rolling(window=window).std()
+#     )
+
+#     expansion = (data["Upper_Band"] - data["Lower_Band"]) / data["Middle_Band"] >= 0.1
+#     expansion_dates = expansion[expansion].index
+#     return expansion_dates
+
+
+# def get_bollinger_band_breakout_dates(data, window=20, num_std_dev=2):
+#     data["Middle_Band"] = data["Close"].rolling(window=window).mean()
+#     data["Upper_Band"] = (
+#         data["Middle_Band"] + num_std_dev * data["Close"].rolling(window=window).std()
+#     )
+#     data["Lower_Band"] = (
+#         data["Middle_Band"] - num_std_dev * data["Close"].rolling(window=window).std()
+#     )
+
+#     breakout = data["Close"] > data["Upper_Band"]
+#     breakout_dates = breakout[breakout].index
+#     return breakout_dates
+
+
+# def get_bollinger_band_pullback_dates(data, window=20, num_std_dev=2):
+#     data["Middle_Band"] = data["Close"].rolling(window=window).mean()
+#     data["Upper_Band"] = (
+#         data["Middle_Band"] + num_std_dev * data["Close"].rolling(window=window).std()
+#     )
+#     data["Lower_Band"] = (
+#         data["Middle_Band"] - num_std_dev * data["Close"].rolling(window=window).std()
+#     )
+
+#     pullback = data["Close"] < data["Lower_Band"]
+#     pullback_dates = pullback[pullback].index
+#     return pullback_dates
+
+
+# def get_volume_spike_dates(data, window=20, num_std_dev=2):
+#     data["Volume_MA"] = data["Volume"].rolling(window=window).mean()
+#     data["Volume_MA_std"] = data["Volume"].rolling(window=window).std()
+
+#     spike = data["Volume"] > data["Volume_MA"] + num_std_dev * data["Volume_MA_std"]
+#     spike_dates = spike[spike].index
+#     return spike_dates
