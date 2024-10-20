@@ -16,7 +16,7 @@ from utils.indicator_helpers import (
 # logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 
 
-def get_apex_bull_raging_dates(data, custom_aggregate_2days = True):
+def get_apex_bull_raging_dates(data, custom_aggregate_2days = True, flush_treshold = 0.7, ratio_of_flush_bars_to_consider_raging = 0.3):
     if custom_aggregate_2days:
         data = get_2day_aggregated_data(data)
 
@@ -66,7 +66,7 @@ def get_apex_bull_raging_dates(data, custom_aggregate_2days = True):
 
         # Analyze the range from high point to stopping point
         range_data = data.loc[high_point_date:stopping_point_date]
-        flush_down_mask = (range_data["Open"] - range_data["Close"]) > 0.7 * (
+        flush_down_mask = (range_data["Open"] - range_data["Close"]) > flush_treshold * (
             range_data["High"] - range_data["Low"]
         )
         flush_down_bars = range_data[flush_down_mask]
@@ -96,7 +96,7 @@ def get_apex_bull_raging_dates(data, custom_aggregate_2days = True):
 
         total_bar_count = len(range_data)
         flush_down_count = flush_down_mask.sum()
-        if total_bar_count < 5 or flush_down_count / total_bar_count < 0.3:
+        if total_bar_count < 5 or flush_down_count / total_bar_count < ratio_of_flush_bars_to_consider_raging:
             # logging.info(
             #     f"❌ less than 5 bars or not majority flush down, flush down bars: {flush_down_count}, total bars: {total_bar_count}"
             # )
@@ -126,7 +126,7 @@ def get_apex_bull_raging_dates(data, custom_aggregate_2days = True):
     return bull_raging_dates
 
 
-def get_apex_bear_raging_dates(data, custom_aggregate_2days = True):
+def get_apex_bear_raging_dates(data, custom_aggregate_2days = True, flush_treshold = 0.7, ratio_of_flush_bars_to_consider_raging = 0.3):
 
     if custom_aggregate_2days:
         data = get_2day_aggregated_data(data)
@@ -177,7 +177,7 @@ def get_apex_bear_raging_dates(data, custom_aggregate_2days = True):
 
         # Analyze the range from low point to stopping point
         range_data = data.loc[low_point_date:stopping_point_date]
-        flush_up_mask = (range_data["Close"] - range_data["Open"]) > 0.7 * (
+        flush_up_mask = (range_data["Close"] - range_data["Open"]) > flush_treshold * (
             range_data["High"] - range_data["Low"]
         )
         flush_up_bars = range_data[flush_up_mask]
@@ -206,7 +206,7 @@ def get_apex_bear_raging_dates(data, custom_aggregate_2days = True):
         total_bar_count = len(range_data)
         flush_up_count = flush_up_mask.sum()
 
-        if total_bar_count < 5 or flush_up_count / total_bar_count < 0.3:
+        if total_bar_count < 5 or flush_up_count / total_bar_count < ratio_of_flush_bars_to_consider_raging:
             # logging.info(
             #     f"❌ less than 5 bars or not majority flush up, flush up bars: {flush_up_count}, total bars: {total_bar_count}"
             # )
@@ -877,7 +877,7 @@ def get_apex_downtrend_dates(data, custom_aggregate_2days = True):
     return downtrend_dates
 
 
-def get_apex_bull_appear_dates(data, custom_aggregate_2days = True):
+def get_apex_bull_appear_dates(data, custom_aggregate_2days = True, only_fetch_last = False):
 
     if custom_aggregate_2days:
         data = get_2day_aggregated_data(data)
@@ -895,7 +895,9 @@ def get_apex_bull_appear_dates(data, custom_aggregate_2days = True):
         data["Low"] > data["Low"].shift(1)
     )
     wallaby_dates = data.index[condition]
-
+    if only_fetch_last:
+        wallaby_dates = wallaby_dates[-1:]
+        
     bull_appear_dates = []
     potential_bear_traps = get_low_inflexion_points(data)
 

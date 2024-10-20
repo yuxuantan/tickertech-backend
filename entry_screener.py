@@ -31,11 +31,11 @@ def calculate_latest_indicator_and_alert(symbol, interval, output_size, gap_for_
     analysis_results = {}
     print("calculating bull raging dates")
     analysis_results["apex_bull_raging"] = indicators.get_apex_bull_raging_dates(
-        df, custom_aggregate_2days=False
+        df, custom_aggregate_2days=False, flush_treshold=0.5, ratio_of_flush_bars_to_consider_raging=0.4
     )
     print("calculating bull appear dates")
     analysis_results["apex_bull_appear"] = indicators.get_apex_bull_appear_dates(
-        df, custom_aggregate_2days=False
+        df, custom_aggregate_2days=False, only_fetch_last=True
     )
     print("calculating bull uptrend dates")
     analysis_results["apex_bull_uptrend"] = indicators.get_apex_uptrend_dates(
@@ -43,25 +43,18 @@ def calculate_latest_indicator_and_alert(symbol, interval, output_size, gap_for_
     )
     print("calculating bear raging dates")
     analysis_results["apex_bear_raging"] = indicators.get_apex_bear_raging_dates(
-        df, custom_aggregate_2days=False
+        df, custom_aggregate_2days=False, flush_treshold=0.5, ratio_of_flush_bars_to_consider_raging=0.4
     )
     print("calculating bear appear dates")
     analysis_results["apex_bear_appear"] = indicators.get_apex_bear_appear_dates(
-        df, custom_aggregate_2days=False
+        df, custom_aggregate_2days=False, only_fetch_last=True
     )
     print("calculating bear downtrend dates")
     analysis_results["apex_bear_downtrend"] = indicators.get_apex_downtrend_dates(
         df, custom_aggregate_2days=False
     )
 
-    conclusion = []
     for indicator, dates in analysis_results.items():
-        
-        # do simulation using different risk reward ratio
-        best_risk_reward_ratio = -1
-        highest_portfolio_value_till_now = -1
-
-        take_profit_per_trade = max_loss_per_trade * risk_reward_ratio
 
         if len(dates) == 0:
             print(f"skipping because no {indicator} detected")

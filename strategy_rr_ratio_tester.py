@@ -16,8 +16,8 @@ interval_granularity = "min"
 output_size = 5000
 
 simulation_sl_per_trade = 2
-risk_reward_ratio_to_try = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4]
-# risk_reward_ratio_to_try = [2]
+# risk_reward_ratio_to_try = [1.5, 2, 2.5, 3, 3.5, 4]
+risk_reward_ratio_to_try = [1]
 
 
 # url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}min&outputsize={output_size}&apikey={api_key}"
@@ -57,7 +57,7 @@ print(df.tail())
 analysis_results = {}
 print("calculating bull appear dates")
 analysis_results["apex_bull_raging"] = indicators.get_apex_bull_raging_dates(
-    df, custom_aggregate_2days=False
+    df, custom_aggregate_2days=False, flush_treshold=0.5, ratio_of_flush_bars_to_consider_raging=0.4
 )
 print("calculating bull raging dates")
 analysis_results["apex_bull_appear"] = indicators.get_apex_bull_appear_dates(
@@ -69,7 +69,7 @@ analysis_results["apex_bull_uptrend"] = indicators.get_apex_uptrend_dates(
 )
 print("calculating bear appear dates")
 analysis_results["apex_bear_raging"] = indicators.get_apex_bear_raging_dates(
-    df, custom_aggregate_2days=False
+    df, custom_aggregate_2days=False, flush_treshold=0.5, ratio_of_flush_bars_to_consider_raging=0.4
 )
 print("calculating bear raging dates")
 analysis_results["apex_bear_appear"] = indicators.get_apex_bear_appear_dates(
