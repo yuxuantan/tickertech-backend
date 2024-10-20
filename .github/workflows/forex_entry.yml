@@ -6,7 +6,7 @@ on:
   workflow_dispatch:         # Allow manual triggering of the workflow
 
 jobs:
-  calculate_and_insert:
+  scan_and_alert:
     runs-on: ubuntu-latest
     env:
       TELEGRAM_BOT_API_TOKEN: ${{ secrets.TELEGRAM_BOT_API_TOKEN }}
