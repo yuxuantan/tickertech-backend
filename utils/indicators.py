@@ -897,7 +897,7 @@ def get_apex_bull_appear_dates(data, custom_aggregate_2days = True, only_fetch_l
     wallaby_dates = data.index[condition]
     if only_fetch_last:
         wallaby_dates = wallaby_dates[-1:]
-        
+
     bull_appear_dates = []
     potential_bear_traps = get_low_inflexion_points(data)
 
@@ -1036,7 +1036,7 @@ def get_apex_bull_appear_dates(data, custom_aggregate_2days = True, only_fetch_l
     return pd.DatetimeIndex(bull_appear_dates)
 
 
-def get_apex_bear_appear_dates(data, custom_aggregate_2days = True):
+def get_apex_bear_appear_dates(data, custom_aggregate_2days = True, only_fetch_last = False):
 
     if custom_aggregate_2days:
         data = get_2day_aggregated_data(data)
@@ -1054,6 +1054,8 @@ def get_apex_bear_appear_dates(data, custom_aggregate_2days = True):
     )
     wallaby_dates = data.index[condition]
 
+    if only_fetch_last:
+        wallaby_dates = wallaby_dates[-1:]
     bear_appear_dates = []
     potential_bull_traps = get_high_inflexion_points(data)
 
