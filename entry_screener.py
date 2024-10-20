@@ -1,29 +1,16 @@
 import utils.indicators as indicators
 import utils.telegram_controller as tc
+import time
 
 # import utils.ticker_getter as tg
 import requests
 import pandas as pd
 
 api_key = "94a3bc39c81e45dd9836712337cc5dec"
-# symbol = "XAU/USD"
-# gap_for_sl = 0.15
-symbol = "BTC/USD"
-gap_for_sl = 1.88
 
-interval = 15  # Can be 1min, 5min, 15min, 30min, 1h, etc.
-output_size = 5000
-
-sl_per_trade = 20
-risk_reward_ratio = 2
-
-# USE what exchange for BTC/USD? price different from IC Markets. Only 'Binance', 'Bitfinex', 'Coinbase Pro'
-# url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}min&outputsize={output_size}&apikey={api_key}&exchange=Binance"
-url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}min&outputsize={output_size}&apikey={api_key}"
-
-print(f"fetching data from {url}")
-
-while True:
+def calculate_latest_indicator_and_alert(symbol, interval, output_size, gap_for_sl, max_loss_per_trade, risk_reward_ratio):
+    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}min&outputsize={output_size}&apikey={api_key}"
+    print(f"fetching data from {url}")
     response = requests.get(url)
     data = response.json()["values"]
 
@@ -74,7 +61,7 @@ while True:
         best_risk_reward_ratio = -1
         highest_portfolio_value_till_now = -1
 
-        take_profit_per_trade = sl_per_trade * risk_reward_ratio
+        take_profit_per_trade = max_loss_per_trade * risk_reward_ratio
 
         if len(dates) == 0:
             print(f"skipping because no {indicator} detected")
@@ -98,7 +85,7 @@ while True:
                     entry_sweet_spot_price
                     + (entry_sweet_spot_price - sl_price) * risk_reward_ratio
                 )
-                quantity = sl_per_trade / (
+                quantity = max_loss_per_trade / (
                     entry_sweet_spot_price - sl_price
                 )  # quantity = 2% of total portfolio / (entry - stop loss)
         else:
@@ -111,24 +98,28 @@ while True:
                 entry_sweet_spot_price
                 - (sl_price - entry_sweet_spot_price) * risk_reward_ratio
             )
-            quantity = sl_per_trade / (sl_price - entry_sweet_spot_price)
+            quantity = max_loss_per_trade / (sl_price - entry_sweet_spot_price)
         
-        msg = f"*** {indicator} detected! ***\n"
-        msg += f"```\n"
+        msg = f"🚨 {indicator} detected for {symbol}! ***\n"
+        msg += "```\n"
         msg += f"detected bar: {date}\n"
         msg += f"entry_sweet_spot_price: {entry_sweet_spot_price}\n"
         msg += f"sl_price: {sl_price}\n"
         msg += f"tp_price: {tp_price}\n"
         msg += f"quantity: {quantity}\n"
-        msg += f"```"
+        msg += f"JUST order market order asap as long as price is in sweet spot range. ensure right quantity"
+        msg += "```"
 
         tc.send_message(message=msg)
         print(f"sent message: {msg}")
         
-
-        tc.send_message(message=msg)
-        print(f"sent message: {msg}")
         
-        # sleep 5 minute, then repeat
-        import time
-        time.sleep(300)
+
+while True:
+    calculate_latest_indicator_and_alert(symbol="BTC/USD", interval=15, output_size=5000, gap_for_sl=0.08, max_loss_per_trade=20, risk_reward_ratio=2)
+    calculate_latest_indicator_and_alert(symbol="XAU/USD", interval=15, output_size=5000, gap_for_sl=0.08, max_loss_per_trade=20, risk_reward_ratio=2)
+    # sleep 5 minute, then repeat
+    time.sleep(300)
+    
+
+    
