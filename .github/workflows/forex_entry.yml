@@ -1,4 +1,4 @@
-name: Calculate Appear
+name: Alert forex entry
 
 on:
   schedule:
