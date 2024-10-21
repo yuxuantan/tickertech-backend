@@ -4,8 +4,6 @@ import yfinance as yf
 from pytickersymbols import PyTickerSymbols
 from get_all_tickers import get_tickers as gt
 
-
-import yfinance as yf
 import time
 import random
 

@@ -1,7 +1,7 @@
 numpy
 pandas
 pyTelegramBotAPI
-yfinance
+yfinance==0.2.44
 pytickersymbols
 supabase
 python-dotenv
