@@ -28,7 +28,7 @@ jobs:
 
       - name: Run first calculate_and_save script
         run: |
-          python -u calculate_apex_raging.py
+          python -u calculate_indicator_and_save.py apex_bull_raging apex_bear_raging
 
 
   calculate_and_insert_remaining_then_alert_step:

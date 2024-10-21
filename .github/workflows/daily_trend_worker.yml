@@ -28,7 +28,7 @@ jobs:
 
       - name: Run first calculate_and_save script
         run: |
-          python -u calculate_apex_trends.py
+          python -u calculate_indicator_and_save.py apex_uptrend apex_downtrend
 
 
   calculate_and_insert_remaining_then_alert_step:
