@@ -55,5 +55,5 @@ jobs:
 
       - name: Run alert_all script
         run: |
-          python -u calculate_apex_trends.py apex_uptrend apex_downtrend
+          python -u calculate_indicator_and_save.py apex_uptrend apex_downtrend
           python -u alert_all.py apex_uptrend apex_downtrend

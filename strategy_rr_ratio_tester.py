@@ -9,7 +9,7 @@ api_key = "94a3bc39c81e45dd9836712337cc5dec"
 # symbol = "XAU/USD"
 # gap_for_sl = 0.15
 symbol = "BTC/USD"
-gap_for_sl = 1.88
+gap_for_sl = 0.08
 
 interval = 15  # Can be 1min, 5min, 15min, 30min, 1h, etc.
 interval_granularity = "min"
@@ -17,16 +17,18 @@ output_size = 5000
 
 simulation_sl_per_trade = 2
 # risk_reward_ratio_to_try = [1.5, 2, 2.5, 3, 3.5, 4]
-risk_reward_ratio_to_try = [1]
+risk_reward_ratio = 2
 
 
 # url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}min&outputsize={output_size}&apikey={api_key}"
-from_date = "2023-08-09"
-to_date = "2023-12-09"
+from_date = "2021-09-09"
+to_date = "2024-09-09"
 # break up into 1 month intervals and append to df
 time_intervals = pd.date_range(start=from_date, end=to_date, freq="M")
-print(time_intervals)
-data = []
+
+
+output = {}
+
 for time_interval in time_intervals:
     start = time_interval.replace(day=1).strftime("%Y-%m-%d")
     end = (time_interval + pd.offsets.MonthEnd(0)).strftime("%Y-%m-%d")
@@ -36,58 +38,71 @@ for time_interval in time_intervals:
 
     print(f"fetching data from {url}")
     response = requests.get(url)
-    data.extend(response.json()["values"])
+    print(response.json())
+    data = response.json()["values"]
 
-# convert data which is a json array into dataframe with 'datetime' key as the index
-df = pd.DataFrame(data).set_index("datetime")
-# rename cols. first letter uppercase
-df.columns = [col.capitalize() for col in df.columns]
-# convert string to float
-df = df.astype(float)
-# convert index of df from string to Timedelta
-df.index = pd.to_datetime(df.index)
+    # convert data which is a json array into dataframe with 'datetime' key as the index
+    df = pd.DataFrame(data).set_index("datetime")
+    # rename cols. first letter uppercase
+    df.columns = [col.capitalize() for col in df.columns]
+    # convert string to float
+    df = df.astype(float)
+    # convert index of df from string to Timedelta
+    df.index = pd.to_datetime(df.index)
 
-# order by ascending date (index)
-df = df.sort_index(ascending=True)
+    # order by ascending date (index)
+    df = df.sort_index(ascending=True)
 
-print(df.head())
-print(df.tail())
 
-# BULL APPEAR
-analysis_results = {}
-print("calculating bull appear dates")
-analysis_results["apex_bull_raging"] = indicators.get_apex_bull_raging_dates(
-    df, custom_aggregate_2days=False, flush_treshold=0.5, ratio_of_flush_bars_to_consider_raging=0.4
-)
-print("calculating bull raging dates")
-analysis_results["apex_bull_appear"] = indicators.get_apex_bull_appear_dates(
-    df, custom_aggregate_2days=False
-)
-print("calculating bull uptrend dates")
-analysis_results["apex_bull_uptrend"] = indicators.get_apex_uptrend_dates(
-    df, custom_aggregate_2days=False
-)
-print("calculating bear appear dates")
-analysis_results["apex_bear_raging"] = indicators.get_apex_bear_raging_dates(
-    df, custom_aggregate_2days=False, flush_treshold=0.5, ratio_of_flush_bars_to_consider_raging=0.4
-)
-print("calculating bear raging dates")
-analysis_results["apex_bear_appear"] = indicators.get_apex_bear_appear_dates(
-    df, custom_aggregate_2days=False
-)
-print("calculating bear downtrend dates")
-analysis_results["apex_bear_downtrend"] = indicators.get_apex_downtrend_dates(
-    df, custom_aggregate_2days=False
-)
+    # Get boolean value: is 50 sma sloping upwards at the end of the month?
+    sma_50 = df['Close'].rolling(window=50).mean()
+    is_sma_50_upwards = sma_50.iloc[-1] > sma_50.iloc[-2]
+    print(f"50 SMA sloping upwards at the end of the month: {is_sma_50_upwards}")
+    
 
-conclusion = []
-for indicator, dates in analysis_results.items():
-    print(f"*** {indicator} ***")
-    # do simulation using different risk reward ratio
-    best_risk_reward_ratio = -1
-    highest_portfolio_value_till_now = -1
+    # is 50 sma above 200 sma at the end of the month?
+    sma_200 = df['Close'].rolling(window=200).mean()
+    is_50_sma_above_200_sma = sma_50.iloc[-1] > sma_200.iloc[-1]
+    print(f"50 SMA above 200 SMA at the end of the month: {is_50_sma_above_200_sma}")
 
-    for risk_reward_ratio in risk_reward_ratio_to_try:
+
+
+    # BULL APPEAR
+    analysis_results = {}
+    print("calculating bull appear dates")
+    analysis_results["apex_bull_raging"] = indicators.get_apex_bull_raging_dates(
+        df, custom_aggregate_2days=False, flush_treshold=0.5, ratio_of_flush_bars_to_consider_raging=0.4
+    )
+    print("calculating bull raging dates")
+    analysis_results["apex_bull_appear"] = indicators.get_apex_bull_appear_dates(
+        df, custom_aggregate_2days=False
+    )
+    print("calculating bull uptrend dates")
+    analysis_results["apex_bull_uptrend"] = indicators.get_apex_uptrend_dates(
+        df, custom_aggregate_2days=False
+    )
+    print("calculating bear appear dates")
+    analysis_results["apex_bear_raging"] = indicators.get_apex_bear_raging_dates(
+        df, custom_aggregate_2days=False, flush_treshold=0.5, ratio_of_flush_bars_to_consider_raging=0.4
+    )
+    print("calculating bear raging dates")
+    analysis_results["apex_bear_appear"] = indicators.get_apex_bear_appear_dates(
+        df, custom_aggregate_2days=False
+    )
+    print("calculating bear downtrend dates")
+    analysis_results["apex_bear_downtrend"] = indicators.get_apex_downtrend_dates(
+        df, custom_aggregate_2days=False
+    )
+
+    # conclusion = []
+    output[time_interval] = {}
+    for indicator, dates in analysis_results.items():
+        print(f"*** {indicator} ***")
+        # do simulation using different risk reward ratio
+        # best_risk_reward_ratio = -1
+        # highest_portfolio_value_till_now = -1
+
+        # for risk_reward_ratio in risk_reward_ratio_to_try:
         simulation_portfolio_value = 100
         simulation_take_profit_per_trade = simulation_sl_per_trade * risk_reward_ratio
         num_wins = 0
@@ -173,37 +188,52 @@ for indicator, dates in analysis_results.items():
                     total_valid_trades += 1
                     break
 
-                # if 100 bars later, no TP or SL, break
-                # elif i == 99:
-                # print("no tp or SL after 99 bars")
+    
 
-        if simulation_portfolio_value > highest_portfolio_value_till_now:
-            highest_portfolio_value_till_now = simulation_portfolio_value
-            best_risk_reward_ratio = risk_reward_ratio
+        # add result to output dataframe for this strategy
+        output[time_interval][indicator] = simulation_portfolio_value
+        output[time_interval]["is_50_sma_above_200_sma"] = is_50_sma_above_200_sma
+        output[time_interval]["is_sma_50_upwards"] = is_sma_50_upwards
+        # output[time_interval][f"{indicator}_valid_trades"] = total_valid_trades
+        # output[time_interval][f"{indicator}_win_rate"] = num_wins / total_valid_trades * 100 if total_valid_trades != 0 else 0
 
-        print(f"risk reward ratio: {risk_reward_ratio} ***")
-        print(f"Total VALUE at the end of simulation: {simulation_portfolio_value}")
-        print(f"num wins: {num_wins}")
-        print(f"total trades: {len(dates)}")
-        print(f"total valid trades: {total_valid_trades}")
-        if total_valid_trades == 0:
-            print("win rate (out of valid trades): 0%")
-        else:
-            print(
-                f"win rate (out of valid trades): {num_wins / total_valid_trades * 100}%"
-            )
-        print("======================")
-
-    conclusion.append(
-        (indicator, highest_portfolio_value_till_now, best_risk_reward_ratio)
-        # f"BEST RISK REWARD RATIO for {indicator} is {best_risk_reward_ratio} with total value of {highest_portfolio_value_till_now}"
-    )
+        # write to a csv file in outputs folder
+        output_df = pd.DataFrame(output)
+        # swap columns and rows
+        output_df = output_df.transpose()
+        output_df.to_csv(f"outputs/{symbol.replace('/', '')}-{interval}.csv")
 
 
-print("*********************** CONCLUSION ***********************")
-overall_win_loss = 0
-for msg in conclusion:
-    overall_win_loss += msg[1]
-    print(msg)
+        # if simulation_portfolio_value > highest_portfolio_value_till_now:
+        #     highest_portfolio_value_till_now = simulation_portfolio_value
+        #     best_risk_reward_ratio = risk_reward_ratio
 
-print("overall win/loss: ", round(overall_win_loss / 6 - 100, 2), "%")
+        # print(f"risk reward ratio: {risk_reward_ratio} ***")
+        # print(f"Total VALUE at the end of simulation: {simulation_portfolio_value}")
+        # print(f"num wins: {num_wins}")
+        # print(f"total trades: {len(dates)}")
+        # print(f"total valid trades: {total_valid_trades}")
+        # if total_valid_trades == 0:
+        #     print("win rate (out of valid trades): 0%")
+        # else:
+        #     print(
+        #         f"win rate (out of valid trades): {num_wins / total_valid_trades * 100}%"
+        #     )
+        # print("======================")
+
+    print(output)
+        
+    # conclusion.append(
+    #     (indicator, highest_portfolio_value_till_now, best_risk_reward_ratio)
+    #     # f"BEST RISK REWARD RATIO for {indicator} is {best_risk_reward_ratio} with total value of {highest_portfolio_value_till_now}"
+    # )
+
+
+
+# print("*********************** CONCLUSION ***********************")
+# overall_win_loss = 0
+# for msg in conclusion:
+#     overall_win_loss += msg[1]
+#     print(msg)
+
+# print("overall win/loss: ", round(overall_win_loss / 6 - 100, 2), "%")

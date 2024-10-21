@@ -55,5 +55,5 @@ jobs:
 
       - name: Run alert_all script
         run: |
-          python -u calculate_apex_raging.py apex_bull_raging apex_bear_raging
+          python -u calculate_indicator_and_save.py apex_bull_raging apex_bear_raging
           python -u alert_all.py apex_bull_raging apex_bear_raging

@@ -67,6 +67,8 @@ def calculate_latest_indicator_and_alert(symbol, interval, output_size, gap_for_
         if str(date) not in [str(df.index[-i]) for i in range(1, alert_recency_filter+1)]:
             print(f"skipping because last entry date for {indicator} is {date}, which is not last 2 bar")
             continue
+        else:
+             print(f"[ALERT] because last entry date for {indicator} is {date}, which is in last 2 bar")
         
         if "bull" in indicator:
                 entry_sweet_spot_price = (
@@ -93,14 +95,13 @@ def calculate_latest_indicator_and_alert(symbol, interval, output_size, gap_for_
             )
             quantity = max_loss_per_trade / (sl_price - entry_sweet_spot_price)
         
-        msg = f"🚨 {indicator} detected for {symbol}! ***\n"
+        msg = f"🚨 {indicator} detected for {symbol}!\n"
         msg += "```\n"
         msg += f"detected bar: {date}\n"
-        msg += f"entry_sweet_spot_price: {entry_sweet_spot_price}\n"
-        msg += f"sl_price: {sl_price}\n"
-        msg += f"tp_price: {tp_price}\n"
-        msg += f"quantity: {quantity}\n"
-        msg += f"JUST order market order asap as long as price is in sweet spot range. ensure right quantity"
+        # msg += f"entry_sweet_spot_price: {entry_sweet_spot_price}\n"
+        # msg += f"sl_price: {sl_price}\n"
+        # msg += f"tp_price: {tp_price}\n"
+        # msg += f"quantity: {quantity}\n"
         msg += "```"
 
         tc.send_message(message=msg)
@@ -109,8 +110,8 @@ def calculate_latest_indicator_and_alert(symbol, interval, output_size, gap_for_
         
 
 while True:
-    calculate_latest_indicator_and_alert(symbol="BTC/USD", interval=15, output_size=5000, gap_for_sl=0.08, max_loss_per_trade=20, risk_reward_ratio=2)
-    calculate_latest_indicator_and_alert(symbol="XAU/USD", interval=15, output_size=5000, gap_for_sl=0.08, max_loss_per_trade=20, risk_reward_ratio=2)
+    calculate_latest_indicator_and_alert(symbol="BTC/USD", interval=15, output_size=5000, gap_for_sl=0.03, max_loss_per_trade=20, risk_reward_ratio=2)
+    calculate_latest_indicator_and_alert(symbol="XAU/USD", interval=15, output_size=5000, gap_for_sl=0.03, max_loss_per_trade=20, risk_reward_ratio=2)
     # sleep 5 minute, then repeat
     time.sleep(300)
     
