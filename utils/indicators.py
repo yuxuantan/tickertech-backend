@@ -1152,7 +1152,7 @@ def get_apex_bear_appear_dates(data, custom_aggregate_2days = True, only_fetch_l
                 logging.info(
                     f"Condition 5b met: touches SMA 20, 50 or 200: {curr_data['Low']}, {curr_data['High']}"
                 )
-                logging.info(f"SMAs are {data["SMA_20"].iloc[curr_pos]}, {data["SMA_50"].iloc[curr_pos]}, {data["SMA_200"].iloc[curr_pos]}")
+                # logging.info(f"SMAs are {data["SMA_20"].iloc[curr_pos]}, {data["SMA_50"].iloc[curr_pos]}, {data["SMA_200"].iloc[curr_pos]}")
             else:
                 continue
 
