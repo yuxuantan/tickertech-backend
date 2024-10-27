@@ -13,7 +13,7 @@ from utils.indicator_helpers import (
 )
 
 ## Uncomment line below to log debug messages
-# logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
+logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 
 
 def get_apex_bull_raging_dates(data, custom_aggregate_2days = True, flush_treshold = 0.7, ratio_of_flush_bars_to_consider_raging = 0.3):
@@ -239,16 +239,15 @@ def get_apex_bear_raging_dates(data, custom_aggregate_2days = True, flush_tresho
 
 # @st.cache_data(ttl="1d")
 def get_apex_uptrend_dates(data, custom_aggregate_2days = True):
-
+    
     if custom_aggregate_2days:
         data = get_2day_aggregated_data(data)
 
-    data = get_2day_aggregated_data(data)
     data["SMA_50"] = data["Close"].rolling(window=50).mean()
     data["SMA_200"] = data["Close"].rolling(window=200).mean()
 
-    high_inflexion_points = []
-    low_inflexion_points = []
+    high_inflexion_points = pd.DataFrame()
+    low_inflexion_points = pd.DataFrame()
     for i in range(1, len(data) - 2):
         if (
             data["High"].iloc[i - 1]
@@ -259,90 +258,85 @@ def get_apex_uptrend_dates(data, custom_aggregate_2days = True):
             < data["High"].iloc[i]
             > data["High"].iloc[i + 2]
         ):
-            high_inflexion_points.append(data.index[i])
-        elif (
+            # add series into dataframe. name of series is the index of df
+            high_inflexion_points = pd.concat([high_inflexion_points, data.iloc[i].to_frame().T])
+
+        if (
             data["Low"].iloc[i - 1]
             > data["Low"].iloc[i]
             < data["Low"].iloc[i + 1]
         ) and (
-            data["Low"].iloc[i - 2]
-            > data["Low"].iloc[i]
-            < data["Low"].iloc[i + 2]
+            data["Low"].iloc[i - 2] > data["Low"].iloc[i] < data["Low"].iloc[i + 2]
         ):
-            low_inflexion_points.append(data.index[i])
-
-    inflexion_points = sorted(high_inflexion_points + low_inflexion_points)
-    inflexion_data = data.loc[inflexion_points, ["High", "Low"]]
-    inflexion_data = pd.DataFrame(inflexion_data)
+            low_inflexion_points = pd.concat([low_inflexion_points, data.iloc[i].to_frame().T])
 
     uptrend_dates = []
-
     # LIGHTNING formation check
-    for inflexion_point in high_inflexion_points:
+    # loop through each
+    for index, row in high_inflexion_points.iterrows():
+        high_inflexion_point = row
         logging.info(
-            f"checking lightning formation for high inflexion point {inflexion_point}"
+            f"checking for lightning formation starting at high inflexion point {high_inflexion_point.name}"
         )
-        # get index of inflexion point
-        inflexion_point_pos = inflexion_data.index.get_loc(inflexion_point)
-
-        # if inflexion point is one of the last 4 datapoints, skip
-        if inflexion_point_pos >= len(inflexion_data) - 4:
-            logging.info("broke out because too close to the end")
-            break
 
         # Get price of first inflexion point
-        point_a = inflexion_data.iloc[inflexion_point_pos]
+        point_a = high_inflexion_point
+        
+        # get point b which is the next low inflexion point that is after position of point a
         point_b = next(
-            (point for point in low_inflexion_points if point > point_a.name),
+            (point for index, point in low_inflexion_points.iterrows() if index > point_a.name),
             None,
         )
         if point_b is None:
             logging.info("❌ no low inflexion point found after point A")
             continue
-        point_b = inflexion_data.loc[point_b]
 
+        # get point c which is the next high inflexion point that is after position of point a
         point_c = next(
-            (point for point in high_inflexion_points if point > point_b.name),
+            (point for index, point in high_inflexion_points.iterrows() if index > point_a.name),
             None,
         )
         if point_c is None:
             logging.info("❌ no high inflexion point found after point B")
             continue
-        point_c = inflexion_data.loc[point_c]
 
+        # get point d which is the next low inflexion point that is after position of point b
         point_d = next(
-            (point for point in low_inflexion_points if point > point_c.name),
+            (point for index, point in low_inflexion_points.iterrows() if index > point_b.name),
             None,
         )
         if point_d is None:
             logging.info("❌ no low inflexion point found after point C")
             continue
-        point_d = inflexion_data.loc[point_d]
+
+        if not (point_a.name < point_b.name < point_c.name < point_d.name):
+            logging.info("❌ Points A, B, C, D are not in chronological order")
+            continue
 
         # get the higher and lower value of open and close for each point
         point_a_high_open_close = max(
-            data.loc[point_a.name, "Open"], data.loc[point_a.name, "Close"]
+            point_a["Open"], point_a["Close"]
         )
         point_a_low_open_close = min(
-            data.loc[point_a.name, "Open"], data.loc[point_a.name, "Close"]
+            point_a["Open"], point_a["Close"]
         )
         point_b_high_open_close = max(
-            data.loc[point_b.name, "Open"], data.loc[point_b.name, "Close"]
+            point_b["Open"], point_b["Close"]
         )
         point_b_low_open_close = min(
-            data.loc[point_b.name, "Open"], data.loc[point_b.name, "Close"]
+            point_b["Open"], point_b["Close"]
         )
         point_c_high_open_close = max(
-            data.loc[point_c.name, "Open"], data.loc[point_c.name, "Close"]
+            point_c["Open"], point_c["Close"]
         )
         point_c_low_open_close = min(
-            data.loc[point_c.name, "Open"], data.loc[point_c.name, "Close"]
+            point_c["Open"], point_c["Close"]
         )
         point_d_high_open_close = max(
-            data.loc[point_d.name, "Open"], data.loc[point_d.name, "Close"]
+            point_d["Open"], point_d["Close"]
         )
         point_d_low_open_close = min(
-            data.loc[point_d.name, "Open"], data.loc[point_d.name, "Close"]
+            point_d["Open"], point_d["Close"]
         )
 
         # Check for lightning. must start with high inflexion point, C must be lower than A ,   D must be lower than B and cross back to B (assume it just have to reverse in the direction, but havent reach B)
@@ -390,121 +384,107 @@ def get_apex_uptrend_dates(data, custom_aggregate_2days = True):
             logging.info("✅ enough bars (5) above sma50 and sma200")
 
         # entry bar is the D, which is the reversal point of the trap
-        uptrend_dates.append(inflexion_data.index[inflexion_point_pos + 3])
+        uptrend_dates.append(point_d.name)
         # log out all the dateindex of 4 inflexion points abcd
         logging.info(
             [
                 "Lightning formation",
-                inflexion_point,
-                inflexion_data.index[inflexion_point_pos + 1],
-                inflexion_data.index[inflexion_point_pos + 2],
-                inflexion_data.index[inflexion_point_pos + 3],
+                point_a.name,
+                point_b.name,
+                point_c.name,
+                point_d.name,
             ]
         )
 
-    # M formation check: D must be higher than  B and cross back to C to reach E (above A)
-    for inflexion_point in low_inflexion_points:
-        logging.info(f"checking M formation for low inflexion point {inflexion_point}")
-        # get index of inflexion point
-        inflexion_point_pos = inflexion_data.index.get_loc(inflexion_point)
-        # if inflexion point is one of the last 5 datapoints, skip
-        if inflexion_point_pos >= len(inflexion_data) - 5:
-            break
+    # M formation check: D must be higher than B and cross back to C to reach E (above A)
+    for index, row in low_inflexion_points.iterrows():
+        low_inflexion_point = row
+        logging.info(
+            f"checking for M formation starting at low inflexion point {low_inflexion_point.name}"
+        )
 
         # Get price of first inflexion point
-        point_a = inflexion_data.iloc[inflexion_point_pos]
+        point_a = low_inflexion_point
 
+        # get point b which is the next high inflexion point that is after position of point a
         point_b = next(
-            (point for point in high_inflexion_points if point > point_a.name),
+            (point for index, point in high_inflexion_points.iterrows() if index > point_a.name),
             None,
         )
         if point_b is None:
             logging.info("❌ no high inflexion point found after point A")
             continue
-        point_b = inflexion_data.loc[point_b]
 
+        # get point c which is the next low inflexion point that is after position of point b
         point_c = next(
-            (point for point in low_inflexion_points if point > point_b.name),
+            (point for index, point in low_inflexion_points.iterrows() if index > point_a.name),
             None,
         )
         if point_c is None:
             logging.info("❌ no low inflexion point found after point B")
             continue
-        point_c = inflexion_data.loc[point_c]
 
+        # get point d which is the next high inflexion point that is after position of point c
         point_d = next(
-            (point for point in high_inflexion_points if point > point_c.name),
+            (point for index, point in high_inflexion_points.iterrows() if index > point_b.name),
             None,
         )
         if point_d is None:
             logging.info("❌ no high inflexion point found after point C")
             continue
-        point_d = inflexion_data.loc[point_d]
 
+        # get point e which is the next low inflexion point that is after position of point d
         point_e = next(
-            (point for point in low_inflexion_points if point > point_d.name),
+            (point for index, point in low_inflexion_points.iterrows() if index > point_c.name),
             None,
         )
         if point_e is None:
             logging.info("❌ no low inflexion point found after point D")
             continue
-        point_e = inflexion_data.loc[point_e]
 
+        if not (point_a.name < point_b.name < point_c.name < point_d.name < point_e.name):
+            logging.info("❌ Points A, B, C, D, E are not in chronological order")
+            continue
+        # get the higher and lower value of open and close for each point
         point_a_high_open_close = max(
-            data.loc[point_a.name, "Open"], data.loc[point_a.name, "Close"]
+            point_a["Open"], point_a["Close"]
         )
         point_a_low_open_close = min(
-            data.loc[point_a.name, "Open"], data.loc[point_a.name, "Close"]
+            point_a["Open"], point_a["Close"]
         )
         point_b_high_open_close = max(
-            data.loc[point_b.name, "Open"], data.loc[point_b.name, "Close"]
+            point_b["Open"], point_b["Close"]
         )
         point_b_low_open_close = min(
-            data.loc[point_b.name, "Open"], data.loc[point_b.name, "Close"]
+            point_b["Open"], point_b["Close"]
         )
         point_c_high_open_close = max(
-            data.loc[point_c.name, "Open"], data.loc[point_c.name, "Close"]
+            point_c["Open"], point_c["Close"]
         )
         point_c_low_open_close = min(
-            data.loc[point_c.name, "Open"], data.loc[point_c.name, "Close"]
+            point_c["Open"], point_c["Close"]
         )
         point_d_high_open_close = max(
-            data.loc[point_d.name, "Open"], data.loc[point_d.name, "Close"]
+            point_d["Open"], point_d["Close"]
         )
         point_d_low_open_close = min(
-            data.loc[point_d.name, "Open"], data.loc[point_d.name, "Close"]
+            point_d["Open"], point_d["Close"]
         )
         point_e_high_open_close = max(
-            data.loc[point_e.name, "Open"], data.loc[point_e.name, "Close"]
+            point_e["Open"], point_e["Close"]
         )
         point_e_low_open_close = min(
-            data.loc[point_e.name, "Open"], data.loc[point_e.name, "Close"]
+            point_e["Open"], point_e["Close"]
         )
 
         # Check for M formation. must start with low inflexion point, D must be higher than B, and cross back to C to reach E (above A)
         if (
-            point_d["High"]
-            > point_b["High"]
-            > point_c["High"]
-            > point_e["High"]
-            > point_a["High"]
-            and point_d["Low"]
-            > point_b["Low"]
-            > point_c["Low"]
-            > point_e["Low"]
-            > point_a["Low"]
-            and point_d_high_open_close
-            > point_b_high_open_close
-            > point_c_high_open_close
-            > point_e_high_open_close
-            > point_a_high_open_close
-            and point_d_low_open_close
-            > point_b_low_open_close
-            > point_c_low_open_close
-            > point_e_low_open_close
-            > point_a_low_open_close
+            point_d["High"] > point_b["High"] > point_c["High"] > point_e["High"] > point_a["High"]
+            and point_d["Low"] > point_b["Low"] > point_c["Low"] > point_e["Low"] > point_a["Low"]
+            and point_d_high_open_close > point_b_high_open_close > point_c_high_open_close > point_e_high_open_close > point_a_high_open_close
+            and point_d_low_open_close > point_b_low_open_close > point_c_low_open_close > point_e_low_open_close > point_a_low_open_close
         ):
-            logging.info("VALID M FORMATION")
+            logging.info("✅ VALID M FORMATION")
         else:
             logging.info("❌ not a M formation")
             continue
@@ -513,7 +493,7 @@ def get_apex_uptrend_dates(data, custom_aggregate_2days = True):
 
         num_bars_above_sma_50 = 0
         num_bars_above_sma_200 = 0
-        # loop through each bar between point a and d in data
+        # loop through each bar between point a and e in data
         for i in range(
             data.index.get_loc(point_a.name),
             data.index.get_loc(point_e.name) + 1,
@@ -535,16 +515,17 @@ def get_apex_uptrend_dates(data, custom_aggregate_2days = True):
         else:
             logging.info("✅ enough bars (5) above sma50 and sma200")
 
-        uptrend_dates.append(inflexion_data.index[inflexion_point_pos + 4])
-        # log all the dateindex of 5 inflexion points abcd
+        # entry bar is the E, which is the reversal point of the trap
+        uptrend_dates.append(point_e.name)
+        # log out all the dateindex of 5 inflexion points abcde
         logging.info(
             [
                 "M formation",
-                inflexion_point,
-                inflexion_data.index[inflexion_point_pos + 1],
-                inflexion_data.index[inflexion_point_pos + 2],
-                inflexion_data.index[inflexion_point_pos + 3],
-                inflexion_data.index[inflexion_point_pos + 4],
+                point_a.name,
+                point_b.name,
+                point_c.name,
+                point_d.name,
+                point_e.name,
             ]
         )
 
@@ -556,6 +537,7 @@ def get_apex_uptrend_dates(data, custom_aggregate_2days = True):
 
 # @st.cache_data(ttl="1d")
 def get_apex_downtrend_dates(data, custom_aggregate_2days = True):
+    
     if custom_aggregate_2days:
         data = get_2day_aggregated_data(data)
 
@@ -563,8 +545,8 @@ def get_apex_downtrend_dates(data, custom_aggregate_2days = True):
     data["SMA_50"] = data["Close"].rolling(window=50).mean()
     data["SMA_200"] = data["Close"].rolling(window=200).mean()
 
-    high_inflexion_points = []
-    low_inflexion_points = []
+    high_inflexion_points = pd.DataFrame()
+    low_inflexion_points = pd.DataFrame()
     for i in range(1, len(data) - 2):
         if (
             data["High"].iloc[i - 1]
@@ -575,7 +557,7 @@ def get_apex_downtrend_dates(data, custom_aggregate_2days = True):
             < data["High"].iloc[i]
             > data["High"].iloc[i + 2]
         ):
-            high_inflexion_points.append(data.index[i])
+            high_inflexion_points = pd.concat([high_inflexion_points, data.iloc[i].to_frame().T])
         elif (
             data["Low"].iloc[i - 1]
             > data["Low"].iloc[i]
@@ -585,51 +567,51 @@ def get_apex_downtrend_dates(data, custom_aggregate_2days = True):
             > data["Low"].iloc[i]
             < data["Low"].iloc[i + 2]
         ):
-            low_inflexion_points.append(data.index[i])
-
-    inflexion_points = sorted(high_inflexion_points + low_inflexion_points)
-    inflexion_data = data.loc[inflexion_points, ["High", "Low"]]
-    inflexion_data = pd.DataFrame(inflexion_data)
+            low_inflexion_points = pd.concat([low_inflexion_points, data.iloc[i].to_frame().T])
 
     downtrend_dates = []
 
     # N formation check
-    for inflexion_point in low_inflexion_points:
-        # get index of inflexion point
-        inflexion_point_pos = inflexion_data.index.get_loc(inflexion_point)
-        # if inflexion point is one of the last 4 datapoints, skip
-        if inflexion_point_pos >= len(inflexion_data) - 4:
-            break
+    for index, row in low_inflexion_points.iterrows():
+        high_inflexion_point = row
+        logging.info(
+            f"checking for N formation starting at low inflexion point {high_inflexion_point.name}"
+        )
 
         # Get price of first inflexion point
-        point_a = inflexion_data.iloc[inflexion_point_pos]
+        point_a = high_inflexion_point
 
+        # get point b which is the next high inflexion point that is after position of point a
         point_b = next(
-            (point for point in high_inflexion_points if point > point_a.name),
+            (point for index, point in high_inflexion_points.iterrows() if index > point_a.name),
             None,
         )
         if point_b is None:
             logging.info("❌ no high inflexion point found after point A")
             continue
-        point_b = inflexion_data.loc[point_b]
 
+        # get point c which is the next low inflexion point that is after position of point a
         point_c = next(
-            (point for point in low_inflexion_points if point > point_b.name),
+            (point for index, point in low_inflexion_points.iterrows() if index > point_a.name),
             None,
         )
         if point_c is None:
             logging.info("❌ no low inflexion point found after point B")
             continue
-        point_c = inflexion_data.loc[point_c]
 
+        # get point d which is the next high inflexion point that is after position of point c
         point_d = next(
-            (point for point in high_inflexion_points if point > point_c.name),
+            (point for index, point in high_inflexion_points.iterrows() if index > point_b.name),
             None,
         )
         if point_d is None:
             logging.info("❌ no high inflexion point found after point C")
             continue
-        point_d = inflexion_data.loc[point_d]
+
+        if not (point_a.name < point_b.name < point_c.name < point_d.name):
+            logging.info("❌ Points A, B, C, D are not in chronological order")
+            continue
+        
 
         point_a_high_open_close = max(
             data.loc[point_a.name, "Open"], data.loc[point_a.name, "Close"]
@@ -706,64 +688,62 @@ def get_apex_downtrend_dates(data, custom_aggregate_2days = True):
         else:
             logging.info("✅ enough bars (5) below sma50")
 
-        downtrend_dates.append(inflexion_data.index[inflexion_point_pos + 3])
+        downtrend_dates.append(point_d.name)
         # log all the dateindex of 4 inflexion points abcd
         logging.info(
             [
                 "N formation",
-                inflexion_point,
-                inflexion_data.index[inflexion_point_pos + 1],
-                inflexion_data.index[inflexion_point_pos + 2],
-                inflexion_data.index[inflexion_point_pos + 3],
+                point_a.name,
+                point_b.name,
+                point_c.name,
+                point_d.name
             ]
         )
 
     # W formation check: D must be lower than  B and cross back to C to reach E (below A)
-    for inflexion_point in high_inflexion_points:
-        # get index of inflexion point
-        inflexion_point_pos = inflexion_data.index.get_loc(inflexion_point)
-        # if inflexion point is one of the last 5 datapoints, skip
-        if inflexion_point_pos >= len(inflexion_data) - 5:
-            break
-
+    for index, row in high_inflexion_points.iterrows():
+        high_inflexion_point = row
+        logging.info(
+            f"checking for W formation starting at high inflexion point {high_inflexion_point.name}"
+        )
         # Get price of first inflexion point
-        point_a = inflexion_data.iloc[inflexion_point_pos]
+        point_a = high_inflexion_point
         
         point_b = next(
-            (point for point in low_inflexion_points if point > point_a.name),
+            (point for index, point in low_inflexion_points.iterrows() if index > point_a.name),
             None,
         )
         if point_b is None:
             logging.info("❌ no low inflexion point found after point A")
             continue
-        point_b = inflexion_data.loc[point_b]
 
         point_c = next(
-            (point for point in high_inflexion_points if point > point_b.name),
+            (point for index, point in high_inflexion_points.iterrows() if index > point_a.name),
             None,
         )
         if point_c is None:
             logging.info("❌ no high inflexion point found after point B")
             continue
-        point_c = inflexion_data.loc[point_c]
 
         point_d = next(
-            (point for point in low_inflexion_points if point > point_c.name),
+            (point for index, point in low_inflexion_points.iterrows() if index > point_b.name),
             None,
         )
         if point_d is None:
             logging.info("❌ no low inflexion point found after point C")
             continue
-        point_d = inflexion_data.loc[point_d]
 
         point_e = next(
-            (point for point in high_inflexion_points if point > point_d.name),
+            (point for index, point in high_inflexion_points.iterrows() if index > point_c.name),
             None,
         )
         if point_e is None:
             logging.info("❌ no high inflexion point found after point D")
             continue
-        point_e = inflexion_data.loc[point_e]
+
+        if not (point_a.name < point_b.name < point_c.name < point_d.name < point_e.name):
+            logging.info("❌ Points A, B, C, D, E are not in chronological order")
+            continue
 
         point_a_high_open_close = max(
             data.loc[point_a.name, "Open"], data.loc[point_a.name, "Close"]
@@ -860,15 +840,16 @@ def get_apex_downtrend_dates(data, custom_aggregate_2days = True):
             logging.info("✅ enough bars (5) below sma50")
 
 
-        downtrend_dates.append(inflexion_data.index[inflexion_point_pos + 4])
+        downtrend_dates.append(point_e.name)
         # log all the dateindex of 4 inflexion points abcd
         logging.info(
             [
                 "W formation",
-                inflexion_point,
-                inflexion_data.index[inflexion_point_pos + 1],
-                inflexion_data.index[inflexion_point_pos + 2],
-                inflexion_data.index[inflexion_point_pos + 3],
+                point_a.name,
+                point_b.name,
+                point_c.name,
+                point_d.name,
+                point_e.name
             ]
         )
 
@@ -1042,7 +1023,7 @@ def get_apex_bear_appear_dates(data, custom_aggregate_2days = True, only_fetch_l
         data = get_2day_aggregated_data(data)
 
     if "Close" not in data.columns:
-        # logging.info("The 'Close' column is missing from the data. Skipping...")
+        logging.info("The 'Close' column is missing from the data. Skipping...")
         return None
     data["SMA_20"] = data["Close"].rolling(window=20).mean()
     data["SMA_50"] = data["Close"].rolling(window=50).mean()
@@ -1060,7 +1041,7 @@ def get_apex_bear_appear_dates(data, custom_aggregate_2days = True, only_fetch_l
     potential_bull_traps = get_high_inflexion_points(data)
 
     for date in wallaby_dates:
-        # logging.info(f"======{date}======")
+        logging.info(f"======{date}======")
         wallaby_pos = data.index.get_loc(date)
         kangaroo_pos = wallaby_pos - 1
 
@@ -1077,31 +1058,16 @@ def get_apex_bear_appear_dates(data, custom_aggregate_2days = True, only_fetch_l
         any_bar_went_above_kangaroo = False
         bearish_bar_went_back_down_to_range = False
 
-        # Condition 1: 20 SMA should slope downwards??
+        # Condition 1: 50 SMA should slope downwards??
         if (
             kangaroo_pos + 5 < len(data)
-            and data["SMA_20"].iloc[kangaroo_pos]
-            < data["SMA_20"].iloc[kangaroo_pos + 5]
+            and data["SMA_50"].iloc[kangaroo_pos]
+            < data["SMA_50"].iloc[kangaroo_pos + 5]
         ):
-            # logging.info("Condition 1 not met: 20 SMA should slope downwards")
+            logging.info("Condition 1 FAILED: 50 SMA slopes upwards when it should slope downwards")
             continue
-        # else:
-        # logging.info("Condition 1 met: 20 SMA slopes upwards")
-
-        # Condition 2: Should be below 20 sma (roughly)
-        if (
-            data["High"].iloc[kangaroo_pos]
-            < data["SMA_20"].iloc[kangaroo_pos]
-        ):
-            pass
-            # logging.info(
-            # f"Condition 2 met: K High is below 50 sma: {data['Low'].iloc[kangaroo_pos]} {data['SMA_50'].iloc[kangaroo_pos]}"
-            # )
         else:
-            # logging.info(
-            # f"Condition 2 not met: K High should be below 50 sma {data['Low'].iloc[kangaroo_pos]} {data['SMA_50'].iloc[kangaroo_pos]}"
-            # )
-            continue
+            logging.info("Condition 1 met: 50 SMA slopes downwards")
 
         # Check the next 4 trading dates from wallaby date
         for i in range(1, 5):
@@ -1116,9 +1082,9 @@ def get_apex_bear_appear_dates(data, custom_aggregate_2days = True, only_fetch_l
             # if low is lower than kangaroo, exit
             if (
                 not any_bar_went_above_kangaroo
-                and curr_data["Low"] > data.iloc[kangaroo_pos]["Low"]
+                and curr_data["Low"] < data.iloc[kangaroo_pos]["Low"]
             ):
-                # logging.info("Exiting because low is lower than kangaroo")
+                logging.info("Exiting because low is lower than kangaroo")
                 break
 
             # Condition 2: High above the high of the kangaroo wallaby,
@@ -1127,7 +1093,7 @@ def get_apex_bear_appear_dates(data, custom_aggregate_2days = True, only_fetch_l
                 and curr_data["High"] > data.iloc[kangaroo_pos]["High"]
             ):
                 any_bar_went_above_kangaroo = True
-                # logging.info("Condition 3 met: broke above kangaroo highs")
+                logging.info("Condition 3 met: broke above kangaroo highs")
 
             # Condition 3: must have one of 3 bearish bars (after going out of K range), close between low and high of kangaroo wallaby
             if (
@@ -1146,7 +1112,7 @@ def get_apex_bear_appear_dates(data, custom_aggregate_2days = True, only_fetch_l
                     curr_data["High"] - curr_data["Low"]
                 ):
                     bearish_bar_went_back_down_to_range = True
-                    # logging.info("Condition 4 met: bullish bar close between low and high ")
+                    logging.info("Condition 4 met: bullish bar close between low and high ")
                     break
 
         if not any_bar_went_above_kangaroo or not bearish_bar_went_back_down_to_range:
@@ -1159,13 +1125,13 @@ def get_apex_bear_appear_dates(data, custom_aggregate_2days = True, only_fetch_l
             if curr_pos >= len(data):
                 break
             curr_data = data.iloc[curr_pos]
-            # logging.info(f"Trying to find bear trap or touching of sma for {curr_data.name}")
+            logging.info(f"Trying to find bear trap or touching of sma for {curr_data.name}")
             if any(
                 trap[1] > curr_data["Low"] and trap[1] < curr_data["High"]
                 for trap in active_bull_traps
             ):
                 pass
-                # logging.info(f"Condition 5a met: bear trap met!, {active_bull_traps}")
+                logging.info(f"Condition 5a met: bear trap met!, {active_bull_traps}")
 
             # else if touches sma20, sma50 or sma200
             elif (
@@ -1183,21 +1149,21 @@ def get_apex_bear_appear_dates(data, custom_aggregate_2days = True, only_fetch_l
                 )
             ):
                 pass
-                # logging.info(
-                #     f"Condition 5b met: touches SMA 20, 50 or 200: {curr_data['Low']}, {curr_data['High']}"
-                # )
-                # logging.info(f"SMAs are {data["SMA_20"].iloc[curr_pos]}, {data["SMA_50"].iloc[curr_pos]}, {data["SMA_200"].iloc[curr_pos]}")
+                logging.info(
+                    f"Condition 5b met: touches SMA 20, 50 or 200: {curr_data['Low']}, {curr_data['High']}"
+                )
+                logging.info(f"SMAs are {data["SMA_20"].iloc[curr_pos]}, {data["SMA_50"].iloc[curr_pos]}, {data["SMA_200"].iloc[curr_pos]}")
             else:
                 continue
 
             bear_appear_dates.append(curr_date)
 
-            # logging.info(
-            #     "✅ Wallaby date: "
-            #     + str(date)
-            #     + "; Bear appear date: "
-            #     + str(curr_date)
-            # )
+            logging.info(
+                "✅ Wallaby date: "
+                + str(date)
+                + "; Bear appear date: "
+                + str(curr_date)
+            )
             break
 
     return pd.DatetimeIndex(bear_appear_dates)

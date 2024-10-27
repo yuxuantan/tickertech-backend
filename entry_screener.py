@@ -8,8 +8,8 @@ import pandas as pd
 
 api_key = "94a3bc39c81e45dd9836712337cc5dec"
 
-def calculate_latest_indicator_and_alert(symbol, interval, output_size, gap_for_sl, max_loss_per_trade, risk_reward_ratio):
-    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}min&outputsize={output_size}&apikey={api_key}"
+def calculate_latest_indicator_and_alert(symbol, interval, interval_units, output_size):
+    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}{interval_units}&outputsize={output_size}&apikey={api_key}"
     print(f"fetching data from {url}")
     response = requests.get(url)
     data = response.json()["values"]
@@ -70,32 +70,9 @@ def calculate_latest_indicator_and_alert(symbol, interval, output_size, gap_for_
         else:
              print(f"[ALERT] because last entry date for {indicator} is {date}, which is in last 2 bar")
         
-        if "bull" in indicator:
-                entry_sweet_spot_price = (
-                    df.loc[date]["Low"]
-                    + (df.loc[date]["High"] - df.loc[date]["Low"]) * 3 / 4
-                )  # open at top quarter of appear bar
-                sl_price = df.loc[date]["Low"] - gap_for_sl  # for btc, example sl
-                tp_price = (
-                    entry_sweet_spot_price
-                    + (entry_sweet_spot_price - sl_price) * risk_reward_ratio
-                )
-                quantity = max_loss_per_trade / (
-                    entry_sweet_spot_price - sl_price
-                )  # quantity = 2% of total portfolio / (entry - stop loss)
-        else:
-            entry_sweet_spot_price = (
-                df.loc[date]["High"]
-                - (df.loc[date]["High"] - df.loc[date]["Low"]) * 3 / 4
-            )  # open at bottom quarter of appear bar
-            sl_price = df.loc[date]["High"] + gap_for_sl  # for btc, example sl
-            tp_price = (
-                entry_sweet_spot_price
-                - (sl_price - entry_sweet_spot_price) * risk_reward_ratio
-            )
-            quantity = max_loss_per_trade / (sl_price - entry_sweet_spot_price)
+
         
-        msg = f"🚨 {indicator} detected for {symbol}!\n"
+        msg = f"🚨 {indicator} detected for {symbol}, {interval}min chart!\n"
         msg += "```\n"
         msg += f"detected bar: {date}\n"
         # msg += f"entry_sweet_spot_price: {entry_sweet_spot_price}\n"
@@ -110,10 +87,35 @@ def calculate_latest_indicator_and_alert(symbol, interval, output_size, gap_for_
         
 
 while True:
-    calculate_latest_indicator_and_alert(symbol="BTC/USD", interval=15, output_size=5000, gap_for_sl=0.03, max_loss_per_trade=20, risk_reward_ratio=2)
-    calculate_latest_indicator_and_alert(symbol="XAU/USD", interval=15, output_size=5000, gap_for_sl=0.03, max_loss_per_trade=20, risk_reward_ratio=2)
-    # sleep 5 minute, then repeat
-    time.sleep(300)
+    calculate_latest_indicator_and_alert(symbol="XAU/USD", interval=15, interval_units="min", output_size=5000)
+    calculate_latest_indicator_and_alert(symbol="XAU/USD", interval=30, interval_units="min", output_size=5000)
+
+    calculate_latest_indicator_and_alert(symbol="BTC/USD", interval=15, interval_units="min", output_size=5000)
+    calculate_latest_indicator_and_alert(symbol="BTC/USD", interval=30, interval_units="min", output_size=5000)
+
+    calculate_latest_indicator_and_alert(symbol="USD/JPY", interval=15, interval_units="min", output_size=5000)
+    calculate_latest_indicator_and_alert(symbol="USD/JPY", interval=30, interval_units="min", output_size=5000)
+
+    calculate_latest_indicator_and_alert(symbol="GBP/USD", interval=15, interval_units="min", output_size=5000)
+    calculate_latest_indicator_and_alert(symbol="GBP/USD", interval=30, interval_units="min", output_size=5000)
+
+    calculate_latest_indicator_and_alert(symbol="USD/CAD", interval=15, interval_units="min", output_size=5000)
+    calculate_latest_indicator_and_alert(symbol="USD/CAD", interval=30, interval_units="min", output_size=5000)
+
+    calculate_latest_indicator_and_alert(symbol="NZD/USD", interval=15, interval_units="min", output_size=5000)
+    calculate_latest_indicator_and_alert(symbol="NZD/USD", interval=30, interval_units="min", output_size=5000)
+
+    calculate_latest_indicator_and_alert(symbol="EUR/USD", interval=15, interval_units="min", output_size=5000)
+    calculate_latest_indicator_and_alert(symbol="EUR/USD", interval=30, interval_units="min", output_size=5000)
+
+    calculate_latest_indicator_and_alert(symbol="AUD/USD", interval=15, interval_units="min", output_size=5000)
+    calculate_latest_indicator_and_alert(symbol="AUD/USD", interval=30, interval_units="min", output_size=5000)
+
+    calculate_latest_indicator_and_alert(symbol="USD/CHF", interval=15, interval_units="min", output_size=5000)
+    calculate_latest_indicator_and_alert(symbol="USD/CHF", interval=30, interval_units="min", output_size=5000)
+
+    sleep_time = 300
+    print(f"sleeping for {sleep_time} seconds")
     
 
     
