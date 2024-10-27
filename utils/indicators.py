@@ -13,7 +13,7 @@ from utils.indicator_helpers import (
 )
 
 ## Uncomment line below to log debug messages
-logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
+# logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 
 
 def get_apex_bull_raging_dates(data, custom_aggregate_2days = True, flush_treshold = 0.7, ratio_of_flush_bars_to_consider_raging = 0.3):
