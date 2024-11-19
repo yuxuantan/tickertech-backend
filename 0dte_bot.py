@@ -46,7 +46,7 @@ current_minute = current_time.minute
 print(current_hour)
 
 if (
-    current_hour == 13 or current_hour == 14 or current_hour == 5
+    current_hour == 13 or current_hour == 14 or current_hour == 8
 ):  # correct one # if time between 2 and 3 PM EST, potentially enter
     # if current_hour == 9: # temp one
     print("between 3 and 4am SGT")

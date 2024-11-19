@@ -72,7 +72,7 @@ def calculate_latest_indicator_and_alert(symbol, interval, interval_units, outpu
         
 
 
-        msg = f"🚨 {indicator} detected for {symbol}, {interval}min chart!\n"
+        msg = f"🚨 {indicator} detected for {symbol}, {interval} {interval_units} chart!\n"
         msg += "```\n"
         date_minus_3_hours = date - pd.Timedelta(hours=3) # somehow the bar detected is 3 hours ahead
         msg += f"detected bar: {date_minus_3_hours} SGT\n"
