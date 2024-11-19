@@ -71,14 +71,11 @@ def calculate_latest_indicator_and_alert(symbol, interval, interval_units, outpu
              print(f"[ALERT] because last entry date for {indicator} is {date}, which is in last 2 bar")
         
 
-        
+
         msg = f"🚨 {indicator} detected for {symbol}, {interval}min chart!\n"
         msg += "```\n"
-        msg += f"detected bar: {date}\n"
-        # msg += f"entry_sweet_spot_price: {entry_sweet_spot_price}\n"
-        # msg += f"sl_price: {sl_price}\n"
-        # msg += f"tp_price: {tp_price}\n"
-        # msg += f"quantity: {quantity}\n"
+        date_minus_3_hours = date - pd.Timedelta(hours=3) # somehow the bar detected is 3 hours ahead
+        msg += f"detected bar: {date_minus_3_hours} SGT\n"
         msg += "```"
 
         tc.send_message(message=msg)
@@ -87,32 +84,33 @@ def calculate_latest_indicator_and_alert(symbol, interval, interval_units, outpu
         
 
 while True:
-    calculate_latest_indicator_and_alert(symbol="XAU/USD", interval=15, interval_units="min", output_size=5000)
-    calculate_latest_indicator_and_alert(symbol="XAU/USD", interval=30, interval_units="min", output_size=5000)
-
-    calculate_latest_indicator_and_alert(symbol="BTC/USD", interval=15, interval_units="min", output_size=5000)
-    calculate_latest_indicator_and_alert(symbol="BTC/USD", interval=30, interval_units="min", output_size=5000)
-
     calculate_latest_indicator_and_alert(symbol="USD/JPY", interval=15, interval_units="min", output_size=5000)
     calculate_latest_indicator_and_alert(symbol="USD/JPY", interval=30, interval_units="min", output_size=5000)
+    calculate_latest_indicator_and_alert(symbol="USD/JPY", interval=1, interval_units="h", output_size=5000)
 
     calculate_latest_indicator_and_alert(symbol="GBP/USD", interval=15, interval_units="min", output_size=5000)
     calculate_latest_indicator_and_alert(symbol="GBP/USD", interval=30, interval_units="min", output_size=5000)
+    calculate_latest_indicator_and_alert(symbol="GBP/USD", interval=1, interval_units="h", output_size=5000)
 
     calculate_latest_indicator_and_alert(symbol="USD/CAD", interval=15, interval_units="min", output_size=5000)
     calculate_latest_indicator_and_alert(symbol="USD/CAD", interval=30, interval_units="min", output_size=5000)
+    calculate_latest_indicator_and_alert(symbol="USD/CAD", interval=1, interval_units="h", output_size=5000)
 
     calculate_latest_indicator_and_alert(symbol="NZD/USD", interval=15, interval_units="min", output_size=5000)
     calculate_latest_indicator_and_alert(symbol="NZD/USD", interval=30, interval_units="min", output_size=5000)
+    calculate_latest_indicator_and_alert(symbol="NZD/USD", interval=1, interval_units="h", output_size=5000)
 
     calculate_latest_indicator_and_alert(symbol="EUR/USD", interval=15, interval_units="min", output_size=5000)
     calculate_latest_indicator_and_alert(symbol="EUR/USD", interval=30, interval_units="min", output_size=5000)
+    calculate_latest_indicator_and_alert(symbol="EUR/USD", interval=1, interval_units="h", output_size=5000)
 
     calculate_latest_indicator_and_alert(symbol="AUD/USD", interval=15, interval_units="min", output_size=5000)
     calculate_latest_indicator_and_alert(symbol="AUD/USD", interval=30, interval_units="min", output_size=5000)
+    calculate_latest_indicator_and_alert(symbol="AUD/USD", interval=1, interval_units="h", output_size=5000)
 
     calculate_latest_indicator_and_alert(symbol="USD/CHF", interval=15, interval_units="min", output_size=5000)
     calculate_latest_indicator_and_alert(symbol="USD/CHF", interval=30, interval_units="min", output_size=5000)
+    calculate_latest_indicator_and_alert(symbol="AUD/USD", interval=1, interval_units="h", output_size=5000)
 
     sleep_time = 300
     print(f"sleeping for {sleep_time} seconds")
