@@ -228,7 +228,7 @@ if (
         option_type = 'P' if option_type == 'put' else 'C'
         identifier = f'SPXW {expiry}{option_type}{short_strike_price}'
         # get the current bid and ask price for short leg. use this to find the middle price
-        quote = tc.quote_client.get_option_briefs([identifier])
+        quote = tc.quote_client.get_option_bars([identifier])
         print(quote)
 
         # for each long leg
