@@ -16,7 +16,7 @@ from utils.indicator_helpers import (
 # logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 
 
-def get_apex_bull_raging_dates(data, custom_aggregate_2days = True, flush_treshold = 0.7, ratio_of_flush_bars_to_consider_raging = 0.3):
+def get_apex_bull_raging_dates(data, custom_aggregate_2days = True, flush_treshold = 0.7, ratio_of_flush_bars_to_consider_raging = 0.3, only_fetch_last = False):
     if custom_aggregate_2days:
         data = get_2day_aggregated_data(data)
 
@@ -123,10 +123,13 @@ def get_apex_bull_raging_dates(data, custom_aggregate_2days = True, flush_tresho
             # else:
             # logging.info(f"❌ check bar {i}, no bullish bar closing above stop loss zone")
 
+    if only_fetch_last:
+        return bull_raging_dates[-1:]
+    
     return bull_raging_dates
 
 
-def get_apex_bear_raging_dates(data, custom_aggregate_2days = True, flush_treshold = 0.7, ratio_of_flush_bars_to_consider_raging = 0.3):
+def get_apex_bear_raging_dates(data, custom_aggregate_2days = True, flush_treshold = 0.7, ratio_of_flush_bars_to_consider_raging = 0.3, only_fetch_last = False):
 
     if custom_aggregate_2days:
         data = get_2day_aggregated_data(data)
@@ -233,12 +236,13 @@ def get_apex_bear_raging_dates(data, custom_aggregate_2days = True, flush_tresho
                 break
             # else:
             # logging.info(f"❌ check bar {i}, no bearish bar closing below stop loss zone")
-
+    if only_fetch_last:
+        return bear_raging_dates[-1:]
     return bear_raging_dates
 
 
 # @st.cache_data(ttl="1d")
-def get_apex_uptrend_dates(data, custom_aggregate_2days = True):
+def get_apex_uptrend_dates(data, custom_aggregate_2days = True, only_fetch_last = False):
     
     if custom_aggregate_2days:
         data = get_2day_aggregated_data(data)
@@ -532,11 +536,14 @@ def get_apex_uptrend_dates(data, custom_aggregate_2days = True):
     # sort uptrend_dates in ascending order
     uptrend_dates = sorted(uptrend_dates)
 
+    if only_fetch_last:
+        return uptrend_dates[-1:]
+    
     return uptrend_dates
 
 
 # @st.cache_data(ttl="1d")
-def get_apex_downtrend_dates(data, custom_aggregate_2days = True):
+def get_apex_downtrend_dates(data, custom_aggregate_2days = True, only_fetch_last = False):
     
     if custom_aggregate_2days:
         data = get_2day_aggregated_data(data)
@@ -855,6 +862,10 @@ def get_apex_downtrend_dates(data, custom_aggregate_2days = True):
 
     # sort downtrend_dates in ascending order
     downtrend_dates = sorted(downtrend_dates)
+
+    if only_fetch_last:
+        return downtrend_dates[-1:]
+    
     return downtrend_dates
 
 

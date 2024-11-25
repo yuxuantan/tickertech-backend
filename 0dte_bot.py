@@ -1,273 +1,255 @@
-"""
-- if 85% win rate (conservatively), expectancy is 0.85*0.75 - 0.15*3 = 0.15. this means that for every $1 risked, you get $0.15 back.
- -- target profit is 375 USD (500 SGD) per day (1%)
- -- max loss is 750 USD (1000 SGD) per day (2%)
-
- Strategy:
-- (ONLY If no current positions), Look for opportunities to sell 0DTE options beginning at 230am SGT at 0.5% (~30) price away. latest enter at 4am SGT
-    -- Check 30 min, 5 min and 1 min chart for apex patterns (in this order). Go in the direction of first signal found. If none, go with the trend (if up since open, sell put and vice versa)
-    -- calculate strike price, which is 0.5 % from current price
-    -- calculate spread (only use <20). start trying using 5 -> 10 -> 15 -> 20
-        -- min premium obtained per contract (short - long) is 0.15
-        -- max_contracts_given_buying_power = buying power / (spread * 100) * 0.9
-        -- max_contracts_given_target_profit = target profit / (contract price * number of contracts * 100)
-        -- number of contracts = min(max_contracts_given_buying_power, max_contracts_given_target_profit)
-    -- initial SL at 200% (or triple the price).
-
-- before 4am
-    - if hit 50% of premium obtained, change SL to 50% of premium obtained
-- after 4am
-    - if hit 75% of premium obtained, change SL to 75% of premium obtained
-
-
-"""
-from tigeropen.common.util.contract_utils import option_contract
-from tigeropen.common.util.order_utils import (market_order,  # market order
-                                               limit_order,  # limit order
-                                               stop_order,  # stop order
-                                               stop_limit_order,  # stop limit order
-                                               trail_order,  # trailing stop order
-                                               order_leg)  # additional order
+from tigeropen.common.consts import ComboType
+from tigeropen.common.util.order_utils import combo_order, contract_leg, stop_limit_order, limit_order, market_order
 
 
 import pytz
-from datetime import datetime
+from datetime import datetime, timedelta
 import yfinance as yf
 from utils.tiger_controller import TigerController
 from dotenv import load_dotenv
 import utils.indicators as indicators
+import time
+import utils.telegram_controller as TelegramController
 
 load_dotenv()
-# get current time and check if it is before or after 4am SGT, which is 3pm EST
-current_time = datetime.now().astimezone(pytz.timezone("US/Eastern"))
-current_hour = current_time.hour
-current_minute = current_time.minute
 
-print(current_hour)
+def get_current_time():
+    return datetime.now().astimezone(pytz.timezone("US/Eastern"))
 
-if (
-    current_hour == 13 or current_hour == 14 or current_hour == 8
-):  # correct one # if time between 2 and 3 PM EST, potentially enter
-    # if current_hour == 9: # temp one
-    print("between 3 and 4am SGT")
-    # get current options that are open using tigeropen
-    tc = TigerController()
+def get_open_positions(tc):
     pos = tc.get_open_positions_options()
+    return [p for p in pos if "SPXW" in str(p.contract)]
 
-    contracts = []
-    for p in pos:
-        if "SPXW" in str(p.contract):
-            print(p)
-            contracts.append(p)
+def get_bull_or_bear_rating(timeframes):
+    bull_or_bear_rating = 0
+    for tf in timeframes:
+        data = yf.download("^GSPC", period="5d", interval=tf)
+        # remove the last bar as it is not complete
+        data = data.loc[data.index[:-1]]
 
-    # if open - adjust SL if hit 50% of premium
-    if len(contracts) > 0:
-        print("open positions")
-    elif len(contracts) == 0:
-        print("no open positions")
+        multiplier, look_back_num_bars = get_multiplier_and_lookback(tf)
+        bull_or_bear_rating += calculate_rating(data, tf, multiplier, look_back_num_bars)
+    
+    print(f"bull_or_bear_rating: {bull_or_bear_rating}")
+    return bull_or_bear_rating
 
-        timeframes = ["30m", "15m", "5m", "1m"]
-        bull_or_bear_rating = 0  # the more bullish, the higher the number. the more bearish, the lower the number
-        for tf in timeframes:
-            print("checking " + tf + " chart for signal")
-            data = yf.download("^GSPC", period="1d", interval=tf)
+def get_multiplier_and_lookback(tf):
+    if tf == "30m":
+        return 4, 1
+    elif tf == "15m":
+        return 3, 2
+    elif tf == "5m":
+        return 2, 6
+    elif tf == "1m":
+        return 1, 10
 
-            # multiplier for 30m is 2, 15m is 1.5, 5m is 1, 1m is 1
-            if tf == "30m":
-                multiplier = 4
-                look_back_num_bars = 1
-            elif tf == "15m":
-                multiplier = 3
-                look_back_num_bars = 2
-            elif tf == "5m":
-                multiplier = 2
-                look_back_num_bars = 6
-            elif tf == "1m":
-                multiplier = 1
-                look_back_num_bars = 10
+def calculate_rating(data, tf, multiplier, look_back_num_bars):
+    rating = 0
+    rating += check_for_formation(indicators.get_apex_bull_appear_dates, data, look_back_num_bars, multiplier)
+    rating += check_for_formation(indicators.get_apex_bull_raging_dates, data, look_back_num_bars, multiplier)
+    rating -= check_for_formation(indicators.get_apex_bear_appear_dates, data, look_back_num_bars, multiplier)
+    rating -= check_for_formation(indicators.get_apex_bear_raging_dates, data, look_back_num_bars, multiplier)
+    rating += check_for_formation(indicators.get_apex_uptrend_dates, data, look_back_num_bars, multiplier)
+    rating -= check_for_formation(indicators.get_apex_downtrend_dates, data, look_back_num_bars, multiplier)
+    return rating
 
-            # get bull appear
-            bull_appear_bars = indicators.get_apex_bull_appear_dates(
-                data, custom_aggregate_2days=False, only_fetch_last=True
-            )
-            # if the last signal is one of the last 3 bars, then it is a confirmed signal
-            if (
-                len(bull_appear_bars) > 0
-                and bull_appear_bars[-1] >= data.index[-look_back_num_bars]
-            ):
-                print(
-                    "bull appear detected for "
-                    + tf
-                    + " at "
-                    + str(bull_appear_bars[-1])
-                )
-                bull_or_bear_rating += 1 * multiplier
+def check_for_formation(func, data, look_back_num_bars, multiplier):
+    bars = func(data, custom_aggregate_2days=False, only_fetch_last=True)
+    # if formation detected in the last lookbacknumbars, print it out
+    if len(bars) > 0 and bars[-1] >= data.index[-look_back_num_bars]:
+        print(f"formation detected: {func.__name__} at {bars[-1]}")
+    return multiplier if len(bars) > 0 and bars[-1] >= data.index[-look_back_num_bars] else 0
 
-            # get bull raging
+def get_option_type(bull_or_bear_rating, current_price, open_price):
+    if bull_or_bear_rating > 0:
+        return "PUT"
+    elif bull_or_bear_rating < 0:
+        return "CALL"
+    else:
+        return None
 
-            bull_raging_bars = indicators.get_apex_bull_raging_dates(
-                data,
-                custom_aggregate_2days=False,
-                flush_treshold=0.5,
-                ratio_of_flush_bars_to_consider_raging=0.4,
-            )
-            if (
-                len(bull_raging_bars) > 0
-                and bull_raging_bars[-1] >= data.index[-look_back_num_bars]
-            ):
-                print(
-                    "bull raging detected for "
-                    + tf
-                    + " at "
-                    + str(bull_raging_bars[-1])
-                )
-                bull_or_bear_rating += 1 * multiplier
+def calculate_strike_price(current_price, current_hour, option_type):
+    percent_from_strike = 0.005 if current_hour == 14 else 0.004
+    strike_price = current_price * (1 + percent_from_strike) if option_type == "CALL" else current_price * (1 - percent_from_strike)
+    return round(strike_price / 5) * 5
 
-            # get bear appear
-            bear_appear_bars = indicators.get_apex_bear_appear_dates(
-                data, custom_aggregate_2days=False, only_fetch_last=True
-            )
-            if (
-                len(bear_appear_bars) > 0
-                and bear_appear_bars[-1] >= data.index[-look_back_num_bars]
-            ):
-                print(
-                    "bear appear detected for "
-                    + tf
-                    + " at "
-                    + str(bear_appear_bars[-1])
-                )
-                bull_or_bear_rating -= 1 * multiplier
 
-            # get bear raging
-            bear_raging_bars = indicators.get_apex_bear_raging_dates(
-                data,
-                custom_aggregate_2days=False,
-                flush_treshold=0.5,
-                ratio_of_flush_bars_to_consider_raging=0.4,
-            )
-            if (
-                len(bear_raging_bars) > 0
-                and bear_raging_bars[-1] >= data.index[-look_back_num_bars]
-            ):
-                print(
-                    "bear raging detected for "
-                    + tf
-                    + " at "
-                    + str(bear_raging_bars[-1])
-                )
-                bull_or_bear_rating -= 1 * multiplier
 
-            # get uptrend
-            uptrend_bars = indicators.get_apex_uptrend_dates(
-                data, custom_aggregate_2days=False
-            )
-            if (
-                len(uptrend_bars) > 0
-                and uptrend_bars[-1] >= data.index[-look_back_num_bars]
-            ):
-                print("uptrend detected for " + tf + " at " + str(uptrend_bars[-1]))
-                bull_or_bear_rating += 1 * multiplier
+def get_leg_quote(tc, expiry, strike_price, option_type, is_real=False):
 
-            # get downtrend
-            downtrend_bars = indicators.get_apex_downtrend_dates(
-                data, custom_aggregate_2days=False
-            )
-            if (
-                len(downtrend_bars) > 0
-                and downtrend_bars[-1] >= data.index[-look_back_num_bars]
-            ):
-                print("downtrend detected for " + tf + " at " + str(downtrend_bars[-1]))
-                bull_or_bear_rating -= 1 * multiplier
+    fmt_expiry = expiry[2:].replace("-", "")
+    fmt_option_type = "C" if option_type == "CALL" else "P"
+    fmt_strike = (str(strike_price)+"000").zfill(8)
+    identifier = "SPXW " + fmt_expiry + fmt_option_type + fmt_strike
+    print(identifier)
+    leg_quote = tc.quote_client.get_option_briefs([identifier])
+    if leg_quote.empty:
+        print(f"no data for strike price: {strike_price}, option type: {option_type}")
+        exit()
+    return leg_quote
 
-        print("bull or bear rating: " + str(bull_or_bear_rating))
-        # get current price
-        current_price = data["Close"].iloc[-1]
-        # get open price
-        open_price = data["Open"].iloc[-1]
+def calculate_target_premium(short_leg_mid_price, long_leg_mid_price):
+    target_premium = round(short_leg_mid_price - long_leg_mid_price, 2)
+    return round(target_premium * 20) / 20
 
-        if bull_or_bear_rating > 0:
-            print("bullish")
-            option_type = "put"
-        elif bull_or_bear_rating < 0:
-            print("bearish")
-            option_type = "call"
+def place_order(tc, expiry, short_strike_price, long_strike_price, option_type, target_qty, target_premium):
+    order_leg_short = contract_leg(symbol="SPXW", sec_type="OPT", expiry=expiry, strike=short_strike_price, put_call=option_type, action="SELL", ratio=1)
+    order_leg_long = contract_leg(symbol="SPXW", sec_type="OPT", expiry=expiry, strike=long_strike_price, put_call=option_type, action="BUY", ratio=1)
+    order = combo_order(account=tc.config.account, contract_legs=[order_leg_short, order_leg_long], combo_type=ComboType.VERTICAL, action="SELL", quantity=target_qty, order_type="LMT", limit_price=-float(target_premium))
+    return tc.trade_client.place_order(order)
 
-        # if bull_bear rating is 0, go with the trend.
-        elif bull_or_bear_rating == 0:
-            print("going with the trend")
-            data = yf.download("^GSPC", period="1d", interval="1d")
-            
 
+def main(is_real=False):
+    current_time = get_current_time()
+
+    expiry = current_time.strftime("%Y-%m-%d")
+    tc = TigerController()
+
+    while current_time.hour == 14 or current_time.hour == 15 or not is_real:
+        print("sleeping for 1 mins at start of loop")
+        time.sleep(60)
+
+        spx_positions = get_open_positions(tc)
+        spx_short_positions = [p for p in spx_positions if p.quantity < 0]
+        if not spx_short_positions or not is_real:
+            print("NO open positions. Look to enter new trades")
+            timeframes = ["30m", "15m", "5m", "1m"]
+            bull_or_bear_rating = get_bull_or_bear_rating(timeframes)
+            daily_data = yf.download("^GSPC", period="1d", interval="1d")
+            current_price = daily_data["Close"].iloc[-1]
+            open_price = daily_data["Open"].iloc[-1]
+
+            # take into account that reversal is more likely
             if current_price > open_price:
-                option_type = "put"
-            else:
-                option_type = "call"
-            print("current price: " + str(current_price))
-            print("open price: " + str(open_price))
-        
+                bull_or_bear_rating -= 2
+            elif current_price < open_price:
+                bull_or_bear_rating += 2
 
-        # calculate strike price
-        percent_from_strike = 0.005
-        strike_price = (
-            current_price * (1 + percent_from_strike)
-            if option_type == "call"
-            else current_price * (1 - percent_from_strike)
-        )
-        short_strike_price = round(strike_price / 5) * 5
+            option_type = get_option_type(bull_or_bear_rating, current_price, open_price)
+            if option_type is None:
+                print("bull or bear rating is 0. retry later")
+                continue
 
-        print("option type: " + option_type)
-        print("short strike price: " + str(short_strike_price))
+            short_strike_price = calculate_strike_price(current_price, current_time.hour, option_type)
+            print(f"current price: {current_price}, open price: {open_price}, option type: {option_type}")
 
-        spreads_to_try = [5, 10, 15, 20]
-        long_strike_prices_to_try = [short_strike_price + spread if option_type == "call" else short_strike_price - spread for spread in spreads_to_try]
 
-        print("long strike prices to try: " + str(long_strike_prices_to_try))
-        
-        expiry = current_time.strftime('%y%m%d')
-        option_type = 'P' if option_type == 'put' else 'C'
-        identifier = f'SPXW {expiry}{option_type}{short_strike_price}'
-        # get the current bid and ask price for short leg. use this to find the middle price
-        quote = tc.quote_client.get_option_bars([identifier])
-        print(quote)
+            short_leg_quote = get_leg_quote(tc, expiry, short_strike_price, option_type).copy()
 
-        # for each long leg
-            # get the current bid and ask price for long leg
-            # short leg price - long leg price >= 0.15 # if satisfy this condition, execute both legs for vertical spread then exit this loop
+            # if bid_price or ask_price is None, then abort
+            if short_leg_quote["bid_price"].values[0] is None or short_leg_quote["ask_price"].values[0] is None:
+                print("no bid or ask price for short leg. retry later")
+                continue
 
-        
+            short_leg_mid_price = (short_leg_quote["bid_price"].values[0] + short_leg_quote["ask_price"].values[0]) / 2
+
+            spreads_to_try = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+            long_strike_prices_to_try = [short_strike_price + spread if option_type == "CALL" else short_strike_price - spread for spread in spreads_to_try]
+
+            for long_strike_price in long_strike_prices_to_try:
+                long_leg_quote = get_leg_quote(tc, expiry, long_strike_price, option_type).copy()
+
+                # if bid_price or ask_price is None, then abort
+                if long_leg_quote["bid_price"].values[0] is None or long_leg_quote["ask_price"].values[0] is None:
+                    print("no bid or ask price for long leg. retry later")
+                    continue
+
+                long_leg_mid_price = (long_leg_quote["bid_price"].values[0] + long_leg_quote["ask_price"].values[0]) / 2
+
+                target_premium = calculate_target_premium(short_leg_mid_price, long_leg_mid_price)
+
+                if target_premium >= 0.15:
+                    print(f"expiry: {expiry}")
+                    print(f"short_strike_price: {short_strike_price}, long_strike_price: {long_strike_price}")
+                    print(f"target premium: {target_premium}")
+                    excess_liquidity = tc.trade_client.get_assets()[0].segments["S"].excess_liquidity
+                    max_contracts_given_buying_power = round(excess_liquidity / (abs(short_strike_price - long_strike_price) * 100) * 0.8, 0)
+                    max_contracts_given_target_profit = round(excess_liquidity * 0.01 / (target_premium * 100), 0) if target_premium > 0 else 999999999999
+                    target_qty = min(max_contracts_given_buying_power, max_contracts_given_target_profit)
+                    print(f"target qty: {target_qty}")
+
+                    if is_real:
+                        order_id = place_order(tc, expiry, short_strike_price, long_strike_price, option_type, target_qty, target_premium)
+                        order_res = tc.trade_client.get_order(id=order_id)
+                        TelegramController.send_message(f"order placed: {order_res}")
+                        
+
+        else:
+            print("have open positions already. check if there are existing orders for stop loss and take profit. If not, place them")
+            open_orders = tc.get_open_orders_options()
+            spxw_open_orders = [order for order in open_orders if "SPXW" in str(order.contract)]
+
+            for spx_position in spx_positions:
+                matching_open_order = [order for order in spxw_open_orders if (str(order.contract) == str(spx_position.contract))]
+                if len(matching_open_order) > 0:
+                    matching_open_order = matching_open_order[0]
+                else:
+                    matching_open_order = None
+
+
+                if spx_position.quantity < 0: #short leg
+                    # check if there is a stop loss order for 300% of premium collected. if not, enter it.
+                    if matching_open_order is None:
+                        print(f"no existing order for {spx_position.contract}. need to enter stop loss and take profit orders")
+                        premium_collected = spx_position.average_cost
+                        print(f"premium collected = {premium_collected}")
+
+                        stop_price = round(premium_collected * 4 * 20) / 20
+                        limit_price = round((premium_collected * 4 + 0.1) * 20) / 20
+                        print(f"stop price: {stop_price}, limit price: {limit_price}")
+                        # place stop limit order
+                        order = stop_limit_order(account=tc.config.account, contract=spx_position.contract, action="BUY", quantity=abs(spx_position.quantity), aux_price=stop_price, limit_price=limit_price)
+                        oid = tc.trade_client.place_order(order)
+                        print(f"stop limit order placed with id: {oid}")
+
+                        order_res = tc.trade_client.get_order(id=oid)
+                        TelegramController.send_message(f"order placed: {order_res}")
+
+                    pnl = round((spx_position.average_cost - spx_position.market_price)/ spx_position.average_cost * 100, 2)
+                    print(f"pnl of {spx_position.contract}: {pnl}%")
+                    tp_target_percent = 75
+                    if current_time.hour == 15 and current_time.minute >= 30:
+                        tp_target_percent = 90
+                        
+                    if pnl >= tp_target_percent:
+                        print("take profit because pnl > 75%")
+                        # delete any existing orders that are on HOLD (eg stop loss orders)
+                        if matching_open_order is not None:
+                            matching_open_order_id = matching_open_order.id
+                            print(f"deleting existing order: {matching_open_order_id}")
+                            cancel_order_success = tc.trade_client.cancel_order(id=matching_open_order_id)
+                            print(f"cancel order success: {cancel_order_success}")
+                        # submit limit order
+                        limit_price = round((spx_position.average_cost * 0.25) * 20) / 20
+                        order = limit_order(account=tc.config.account, contract=spx_position.contract, action="BUY", quantity=abs(spx_position.quantity), limit_price=limit_price)
+                        print(f"submitting take profit order for {limit_price}..")
+                        oid = tc.trade_client.place_order(order)
+                        print(f"take profit order placed with id: {oid}")
+
+                        order_res = tc.trade_client.get_order(id=oid)
+                        TelegramController.send_message(f"order placed: {order_res}")
+                
+                elif spx_position.quantity > 0: #long leg
+                    # check if corresponding short leg (with same option type and expiry, but negative quantity) is present. if not present, close the long leg for TP/ SL
+                    matching_short_leg = [position for position in spx_positions if ((str(spx_position.contract)[:-8] in str(position.contract)) and position.quantity < 0)]
+                    if len(matching_short_leg) == 0:
+                        print(f"no corresponding short leg found for {spx_position.contract}. closing long leg")
+                        # delete any existing orders that are on HOLD (eg stop loss orders)
+                        if matching_open_order is not None:
+                            matching_open_order_id = matching_open_order.id
+                            print(f"deleting existing order: {matching_open_order_id}")
+                            cancel_order_success = tc.trade_client.cancel_order(id=matching_open_order_id)
+                            print(f"cancel order success: {cancel_order_success}")
+                        # submit market order
+                        limit_price = round((spx_position.average_cost * 0.25) * 20) / 20
+                        order = market_order(account=tc.config.account, contract=spx_position.contract, action="SELL", quantity=abs(spx_position.quantity))
+                        print("submitting take market order to close long leg..")
+                        oid = tc.trade_client.place_order(order)
+                        print(f"take market order placed with id to close long leg: {oid}")
+
+                        order_res = tc.trade_client.get_order(id=oid)
+                        TelegramController.send_message(f"order placed: {order_res}")
             
-      
 
-# if time between 3 PM - 4pm EST, adjust SL if hit 75% of premium
-elif current_hour == 15:
-    print("between 4 and 5am SGT. Last hour!")
-else:
-    # stop the script because it should not be running
-    print("not between 3 and 5am SGT. script shouldnt be running")
-
-
-def make_order(option_type, strike_price, limit_price, action='SELL'):
-      # enter the trade using tiger
-
-        # Example for a call vertical spread on SPXW
-        
-        quantity = 1
-
-
-        contract = option_contract(identifier=f'SPXW {expiry}{option_type}{strike_price}')
-
-
-        # Create order objects
-        order = limit_order(
-            account=tc.config.account,
-            contract=contract,
-            action=action,
-            quantity=quantity,
-            limit_price=limit_price,
-            # time_in_force='DAY'  # or 'GTC' for Good-Till-Canceled
-        )
-
-        # Place the buy order
-        order_id = tc.trade_client.place_order(order)
-        print(f'Order placed with ID: {order_id}')
+if __name__ == "__main__":
+    main(is_real=True)

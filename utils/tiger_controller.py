@@ -2,7 +2,6 @@ from tigeropen.trade.trade_client import TradeClient
 from tigeropen.tiger_open_config import TigerOpenClientConfig
 from tigeropen.common.consts import SecurityType, Market
 import datetime
-import streamlit as st
 import os
 from tigeropen.quote.quote_client import QuoteClient
 
@@ -28,7 +27,6 @@ class TigerController:
 
 
 
-    @st.cache_data(ttl="1h")
     def get_orders(_self, sec_type = SecurityType.ALL, start_date = datetime.datetime.now()-datetime.timedelta(days=30), end_date = datetime.datetime.now().date()):
 
         date_diff_days = (end_date - start_date).days
@@ -52,18 +50,19 @@ class TigerController:
         filled_orders.sort(key=lambda x: x.trade_time, reverse=True)
         return filled_orders
 
-    @st.cache_data(ttl="1h")
+    def get_open_orders_options(_self):
+        pending_orders = _self.trade_client.get_open_orders(sec_type=SecurityType.OPT)
+        return pending_orders
+    
     def get_open_positions_stocks(_self):
         
         open_positions = _self.trade_client.get_positions(sec_type=SecurityType.STK)
         return open_positions
     
-    @st.cache_data(ttl="1h")
     def get_open_positions_options(_self):
         open_positions = _self.trade_client.get_positions(sec_type=SecurityType.OPT)
         return open_positions
 
-    @st.cache_data(ttl="1h")
     def get_cash(_self):
         assets = _self.trade_client.get_assets()
         return assets[0].summary.cash
