@@ -1,0 +1,33 @@
+name: 0dte spx bot
+
+on:
+  schedule:
+    - cron: '0 20 * * 1-5'  # 3PM EST = 8PM UTC,  Mon - Fri
+  workflow_dispatch:         # Allow manual triggering of the workflow
+
+jobs:
+  calculate_and_insert:
+    runs-on: ubuntu-latest
+    env:
+      TELEGRAM_BOT_API_TOKEN: ${{ secrets.TELEGRAM_BOT_API_TOKEN }}
+      TIGER_PRIVATE_KEY: ${{ secrets.TIGER_PRIVATE_KEY }}
+      TIGER_ID: ${{ secrets.TIGER_ID }}
+      TIGER_ACCOUNT: ${{ secrets.TIGER_ACCOUNT }}
+    steps:
+      - name: Checkout repo content
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run 0dte bot
+        run: |
+          python -u 0dte_bot.py
+

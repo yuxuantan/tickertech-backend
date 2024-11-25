@@ -5,3 +5,4 @@ yfinance==0.2.44
 pytickersymbols
 supabase
 python-dotenv
+tigeropen
