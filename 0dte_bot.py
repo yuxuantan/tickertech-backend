@@ -59,6 +59,7 @@ def get_multiplier_and_lookback(tf):
 
 def calculate_rating(data, tf, multiplier, look_back_num_bars):
     rating = 0
+    print(f"checking formation for tf {tf}")
     rating += check_for_formation(
         indicators.get_apex_bull_appear_dates, data, look_back_num_bars, multiplier
     )
@@ -84,7 +85,7 @@ def check_for_formation(func, data, look_back_num_bars, multiplier):
     bars = func(data, custom_aggregate_2days=False, only_fetch_last=True)
     # if formation detected in the last lookbacknumbars, print it out
     if len(bars) > 0 and bars[-1] >= data.index[-look_back_num_bars]:
-        print(f"formation detected: {func.__name__} at {bars[-1]}")
+        print(f"formation detected for: {func.__name__} at {bars[-1]}")
     return (
         multiplier
         if len(bars) > 0 and bars[-1] >= data.index[-look_back_num_bars]
@@ -102,7 +103,7 @@ def get_option_type(bull_or_bear_rating, current_price, open_price):
 
 
 def calculate_strike_price(current_price, current_hour, option_type):
-    percent_from_strike = 0.004 if current_hour == 14 else 0.003
+    percent_from_strike = 0.003 if current_hour == 14 else 0.002
     strike_price = (
         current_price * (1 + percent_from_strike)
         if option_type == "CALL"
@@ -178,9 +179,7 @@ def main(is_real=False):
     tc = TigerController()
 
     while current_time.hour == 14 or current_time.hour == 15 or not is_real:
-        print("sleeping for 1 mins at start of loop")
-        time.sleep(60)
-
+        
         spx_positions = get_open_positions(tc)
         spx_short_positions = [p for p in spx_positions if p.quantity < 0]
         if not spx_short_positions or not is_real:
@@ -193,9 +192,9 @@ def main(is_real=False):
 
             # take into account that reversal is more likely
             if current_price > open_price:
-                bull_or_bear_rating -= 2
+                bull_or_bear_rating -= 1
             elif current_price < open_price:
-                bull_or_bear_rating += 2
+                bull_or_bear_rating += 1
 
             option_type = get_option_type(
                 bull_or_bear_rating, current_price, open_price
@@ -230,7 +229,7 @@ def main(is_real=False):
                 + short_leg_quote["ask_price"].values[0]
             ) / 2
 
-            spreads_to_try = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+            spreads_to_try = [5, 10, 15, 20, 25]
             long_strike_prices_to_try = [
                 short_strike_price + spread
                 if option_type == "CALL"
@@ -261,7 +260,6 @@ def main(is_real=False):
                 )
 
                 if target_premium >= 0.15:
-                    print(f"expiry: {expiry}")
                     print(
                         f"short_strike_price: {short_strike_price}, long_strike_price: {long_strike_price}"
                     )
@@ -301,6 +299,8 @@ def main(is_real=False):
                             message=f"order placed: {order_res}"
                         )
                     break
+                else:
+                    print(f"target premium too low: {target_premium}")
 
         else:
             print(
@@ -473,6 +473,8 @@ def main(is_real=False):
                         TelegramController.send_message(
                             message=f"market order placed to close long leg: {order_res}"
                         )
+        print("sleeping for 1 mins at end of loop")
+        time.sleep(60)
 
     TelegramController.send_message(
         message=f"0dte bot stopped running at {get_current_time()}"
@@ -481,5 +483,4 @@ def main(is_real=False):
 
 
 if __name__ == "__main__":
-    # main(is_real=True)
-    main(is_real=False)
+    main(is_real=True)
