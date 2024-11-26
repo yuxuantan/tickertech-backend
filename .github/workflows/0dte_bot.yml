@@ -6,7 +6,7 @@ on:
   workflow_dispatch:         # Allow manual triggering of the workflow
 
 jobs:
-  calculate_and_insert:
+  run_0dte_bot:
     runs-on: ubuntu-latest
     env:
       TELEGRAM_BOT_API_TOKEN: ${{ secrets.TELEGRAM_BOT_API_TOKEN }}
@@ -27,7 +27,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run 0dte bot
+      - name: Run 0dte bot script
         run: |
           python -u 0dte_bot.py
 
