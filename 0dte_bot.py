@@ -43,7 +43,6 @@ def get_bull_or_bear_rating(timeframes):
             data, tf, multiplier, look_back_num_bars
         )
 
-    print(f"bull_or_bear_rating: {bull_or_bear_rating}")
     return bull_or_bear_rating
 
 
@@ -204,6 +203,8 @@ def main(is_real=False):
             if option_type is None:
                 print("bull or bear rating is 0. retry later")
                 continue
+            
+            print(f"bull_or_bear_rating: {bull_or_bear_rating}")
 
             short_strike_price = calculate_strike_price(
                 current_price, current_time.hour, option_type
@@ -299,6 +300,7 @@ def main(is_real=False):
                         TelegramController.send_message(
                             message=f"order placed: {order_res}"
                         )
+                    break
 
         else:
             print(
@@ -479,4 +481,5 @@ def main(is_real=False):
 
 
 if __name__ == "__main__":
-    main(is_real=True)
+    # main(is_real=True)
+    main(is_real=False)
