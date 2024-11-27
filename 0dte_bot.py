@@ -335,7 +335,7 @@ def main(is_real=False):
                     # this will only be triggered at the start (max 1 min) after order is first placed, and be set as the default to prevent catestrophic loss. subsequently when other orders are placed, it wont be triggered again
                     if matching_open_order is None:
                         print(
-                            f"no existing order for {spx_position.contract}. need to enter stop loss and take profit orders"
+                            f"no existing order for {spx_position.contract} short leg. need to enter stop loss and take profit orders"
                         )
                         print(f"premium collected = {premium_collected}")
 
@@ -356,6 +356,10 @@ def main(is_real=False):
                         order_res = tc.trade_client.get_order(id=oid)
                         TelegramController.send_message(
                             message=f"order placed for sl default market order: {order_res}"
+                        )
+                    else:
+                        print(
+                            f"existing order for {spx_position.contract} short leg. no need to enter stop loss and take profit orders"
                         )
 
                     # stop loss (market order) manual protection. send in market order to cut loss, triggered if price is 2x premium + if the current price is less than 10 away from the strike in hour 14 or less than 5 away in hour 15
@@ -437,7 +441,7 @@ def main(is_real=False):
                         position
                         for position in spx_positions
                         if (
-                            (str(spx_position.contract)[:-8] in str(position.contract))
+                            (str(spx_position.contract)[:13] in str(position.contract))
                             and position.quantity < 0
                         )
                     ]
@@ -472,6 +476,10 @@ def main(is_real=False):
                         order_res = tc.trade_client.get_order(id=oid)
                         TelegramController.send_message(
                             message=f"market order placed to close long leg: {order_res}"
+                        )
+                    else:
+                        print(
+                            f"corresponding short leg found for {spx_position.contract}. no need to close long leg"
                         )
         print("sleeping for 1 mins at end of loop")
         time.sleep(60)
