@@ -11,7 +11,7 @@ from tigeropen.common.util.order_utils import (
 
 
 import pytz
-from datetime import datetime, timedelta
+from datetime import datetime
 import yfinance as yf
 from utils.tiger_controller import TigerController
 from dotenv import load_dotenv
@@ -105,9 +105,14 @@ def get_option_type(bull_or_bear_rating, current_price, open_price, current_time
             return "PUT"
 
 
-
 def calculate_strike_price(current_price, current_hour, option_type):
-    percent_from_strike = 0.003 if current_hour == 14 else 0.002
+    if current_hour == 10:
+        percent_from_strike = 0.005
+    elif current_hour == 15:
+        percent_from_strike = 0.002
+    else:
+        return None
+
     strike_price = (
         current_price * (1 + percent_from_strike)
         if option_type == "CALL"
@@ -181,19 +186,24 @@ def main(is_real=False):
 
     expiry = current_time.strftime("%Y-%m-%d")
     tc = TigerController()
-    
-    while current_time.hour == 14 or current_time.hour == 15 or not is_real:
-        
+
+    while True:
         spx_positions = get_open_positions(tc)
         spx_short_positions = [p for p in spx_positions if p.quantity < 0]
-        if not spx_short_positions or not is_real:
-            print("NO open positions. Look to enter new trades")
+
+        if (
+            not spx_short_positions
+            and current_time.hour == 10
+            or current_time.hour == 15
+        ) or not is_real:
+            print(
+                "NO open positions. Look to enter new trades at 10-11am and 3-4pm EST"
+            )
             timeframes = ["30m", "15m", "5m"]
             bull_or_bear_rating = get_bull_or_bear_rating(timeframes)
             daily_data = yf.download("^GSPC", period="1d", interval="1d")
             current_price = daily_data["Close"].iloc[-1]
             open_price = daily_data["Open"].iloc[-1]
-
 
             option_type = get_option_type(
                 bull_or_bear_rating, current_price, open_price, current_time
@@ -204,6 +214,10 @@ def main(is_real=False):
             short_strike_price = calculate_strike_price(
                 current_price, current_time.hour, option_type
             )
+            if short_strike_price is None:
+                print("not time to trade yet. Strike price is None. Sleeping for 1 min")
+                time.sleep(60)
+                continue
             print(
                 f"current price: {current_price}, open price: {open_price}, option type: {option_type}"
             )
@@ -222,7 +236,7 @@ def main(is_real=False):
                     + short_leg_quote["ask_price"].values[0]
                 ) / 2
 
-                spreads_to_try = [5, 10, 15, 20, 25]
+                spreads_to_try = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60]
                 long_strike_prices_to_try = [
                     short_strike_price + spread
                     if option_type == "CALL"
@@ -237,63 +251,69 @@ def main(is_real=False):
 
                     # if bid_price or ask_price is None, then abort
                     if (
-                        long_leg_quote["bid_price"].values[0] is None
-                        or long_leg_quote["ask_price"].values[0] is None
+                        long_leg_quote["bid_price"].values[0] is not None
+                        and long_leg_quote["ask_price"].values[0] is not None
                     ):
-                        print("no bid or ask price for long leg. retry later")
-                        continue
+                        long_leg_mid_price = (
+                            long_leg_quote["bid_price"].values[0]
+                            + long_leg_quote["ask_price"].values[0]
+                        ) / 2
 
-                    long_leg_mid_price = (
-                        long_leg_quote["bid_price"].values[0]
-                        + long_leg_quote["ask_price"].values[0]
-                    ) / 2
+                        target_premium = calculate_target_premium(
+                            short_leg_mid_price, long_leg_mid_price
+                        )
 
-                    target_premium = calculate_target_premium(
-                        short_leg_mid_price, long_leg_mid_price
-                    )
+                        if (long_leg_mid_price > 0.2 and current_time.hour == 10) or (
+                            long_leg_mid_price > 0.05 and current_time.hour == 15
+                        ):
+                            print(f"long leg mid price too high: {long_leg_mid_price}")
 
-                    if target_premium >= 0.15:
-                        print(
-                            f"short_strike_price: {short_strike_price}, long_strike_price: {long_strike_price}"
-                        )
-                        print(f"target premium: {target_premium}")
-                        excess_liquidity = (
-                            tc.trade_client.get_assets()[0].segments["S"].excess_liquidity
-                        )
-                        max_contracts_given_buying_power = round(
-                            excess_liquidity
-                            / (abs(short_strike_price - long_strike_price) * 100)
-                            * 0.8,
-                            0,
-                        )
-                        max_contracts_given_target_profit = (
-                            round(excess_liquidity * 0.01 / (target_premium * 100), 0)
-                            if target_premium > 0
-                            else 999999999999
-                        )
-                        target_qty = min(
-                            max_contracts_given_buying_power,
-                            max_contracts_given_target_profit,
-                        )
-                        print(f"target qty: {target_qty}")
-
-                        if is_real:
-                            order_id = place_order(
-                                tc,
-                                expiry,
-                                short_strike_price,
-                                long_strike_price,
-                                option_type,
-                                target_qty,
-                                target_premium,
+                        elif target_premium >= 0.15:
+                            print(
+                                f"short_strike_price: {short_strike_price}, long_strike_price: {long_strike_price}"
                             )
-                            order_res = tc.trade_client.get_order(id=order_id)
-                            TelegramController.send_message(
-                                message=f"order placed: {order_res}"
+                            print(f"target premium: {target_premium}")
+                            excess_liquidity = (
+                                tc.trade_client.get_assets()[0]
+                                .segments["S"]
+                                .excess_liquidity
                             )
-                        break
-                    else:
-                        print(f"target premium too low: {target_premium}")
+                            max_contracts_given_buying_power = round(
+                                excess_liquidity
+                                / (abs(short_strike_price - long_strike_price) * 100)
+                                * 0.8,
+                                0,
+                            )
+                            max_contracts_given_target_profit = (
+                                round(
+                                    excess_liquidity * 0.01 / (target_premium * 100), 0
+                                )
+                                if target_premium > 0
+                                else 999999999999
+                            )
+                            target_qty = min(
+                                max_contracts_given_buying_power,
+                                max_contracts_given_target_profit,
+                            )
+                            print(f"target qty: {target_qty}")
+
+                            if is_real:
+                                order_id = place_order(
+                                    tc,
+                                    expiry,
+                                    short_strike_price,
+                                    long_strike_price,
+                                    option_type,
+                                    target_qty,
+                                    target_premium,
+                                )
+                                order_res = tc.trade_client.get_order(id=order_id)
+                                TelegramController.send_message(
+                                    message=f"order placed: {order_res}"
+                                )
+                            break
+                        else:
+                            print(f"target premium too low: {target_premium}")
 
         else:
             print(
@@ -332,10 +352,12 @@ def main(is_real=False):
                         )
                         print(f"premium collected = {premium_collected}")
 
-                        stop_price = round(premium_collected * 4 * 20) / 20
+                        stop_price = (
+                            round(premium_collected * 5 * 20) / 20
+                        )  # stop price is 5x premium collected from the short leg. this is just in case
 
                         print(f"stop triggered price: {stop_price}")
-                        # place stop limit order
+                        # place stop loss order
                         order = stop_order(
                             account=tc.config.account,
                             contract=spx_position.contract,
@@ -352,22 +374,21 @@ def main(is_real=False):
                         )
                     else:
                         print(
-                            f"existing order for {spx_position.contract} short leg. no need to enter stop loss and take profit orders"
+                            f"existing order exists for {spx_position.contract} short leg. no need to enter stop loss and take profit orders"
                         )
 
                     # stop loss (market order) manual protection. send in market order to cut loss, triggered if price is 2x premium + if the current price is less than 10 away from the strike in hour 14 or less than 5 away in hour 15
                     if (
-                        pnl <= -200
-                        and (
-                            current_time.hour == 14 # 3am-4am sgt
-                            and abs(current_price - float(spx_position.contract.strike)) < 10
-                        )
-                        or (
-                            current_time.hour == 15 # 4am-5am sgt
-                            and abs(current_price - float(spx_position.contract.strike)) < 5
-                        )
+                        current_time.hour <= 14  # before 2pm EST
+                        and abs(current_price - float(spx_position.contract.strike))
+                        / current_price
+                        < 0.003 # roughly 18 apart
+                    ) or (
+                        current_time.hour >= 15  # after 2pm EST
+                        and abs(current_price - float(spx_position.contract.strike))
+                        / current_price
+                        < 0.001 # roughly 6 apart
                     ):
-                        print("manual market order stop loss because pnl < -200%")
                         # delete any existing orders that are on HOLD (eg stop loss orders)
                         if matching_open_order is not None:
                             matching_open_order_id = matching_open_order.id
@@ -376,21 +397,35 @@ def main(is_real=False):
                                 id=matching_open_order_id
                             )
                             print(f"cancel order success: {cancel_order_success}")
-                        # submit market order
-                        order = market_order(
-                            account=tc.config.account,
-                            contract=spx_position.contract,
-                            action="BUY",
-                            quantity=abs(spx_position.quantity),
-                        )
-                        print("submitting market order for stop loss..")
-                        oid = tc.trade_client.place_order(order)
-                        print(f"stop loss (market) order placed with id: {oid}")
 
-                        order_res = tc.trade_client.get_order(id=oid)
-                        TelegramController.send_message(
-                            message=f"order placed for sl manual market order: {order_res}"
-                        )
+                        if pnl < -200:
+                            # submit market order
+                            order = market_order(
+                                account=tc.config.account,
+                                contract=spx_position.contract,
+                                action="BUY",
+                                quantity=abs(spx_position.quantity),
+                            )
+                            print("submitting market order for stop loss..")
+                            oid = tc.trade_client.place_order(order)
+                            print(f"stop loss (market) order placed with id: {oid}")
+
+                            order_res = tc.trade_client.get_order(id=oid)
+                            TelegramController.send_message(
+                                message=f"order placed for sl manual market order: {order_res}"
+                            )
+                        else:
+                            print(f"pnl of {spx_position.contract} not below -200% yet")
+                            stop_price = (
+                                round(premium_collected * 3 * 20) / 20
+                            )  # stop price is 3x premium collected from the short leg.
+                            order = stop_order(
+                                account=tc.config.account,
+                                contract=spx_position.contract,
+                                action="BUY",
+                                quantity=abs(spx_position.quantity),
+                                aux_price=stop_price,
+                            )
 
                     # take profit order - only when pnl is above target tp
 
@@ -480,7 +515,6 @@ def main(is_real=False):
     TelegramController.send_message(
         message=f"0dte bot stopped running at {get_current_time()}"
     )
-        
 
 
 if __name__ == "__main__":
