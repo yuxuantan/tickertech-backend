@@ -10,13 +10,12 @@ import pandas as pd
 import numpy as np
 import datetime
 
-capital = 150000
+capital = 170000
 
 start_date = "2024-01-01"
-end_date = "2024-11-24"
+end_date = "2024-12-02"
 # Download SPX data at 30-minute intervals
 data = yf.download("^GSPC", start=start_date, end=end_date, interval="1h")
-print(data)
 
 # Add Date and Time columns
 data["Time"] = data.index.time
@@ -26,7 +25,6 @@ data["Date"] = data.index.date
 df_entry = data[(data["Time"] == datetime.time(13, 30))][["Date", "Open"]].rename(
     columns={"Open": "entry"}
 )
-
 
 
 day_granular_data = yf.download(
@@ -57,77 +55,37 @@ final_data = final_data[final_data["entry"].notna()]
 final_data = final_data.reset_index(drop=True)
 
 
-final_data["option_type"] = np.where(
-    final_data["entry"] > final_data["Open"], "call", "put" # go against the trend, expect reversal
+# bullish or bearish
+final_data["bullish"] = np.where(
+    final_data["entry"] > final_data["Open"], 1, 0
 )
 
+base_strike_percentage_away = 0.005
+strike_advantage_discount = 0.001
+# for iron condor. if bullish, call strike is 0.35% above, and put strike is 0.25% below. if bearish will be opposite
+final_data['call_strike'] = np.where(final_data['bullish'] == 1, np.round(final_data['entry'] * (1+base_strike_percentage_away) / 5) * 5, np.round(final_data['entry'] * (1+base_strike_percentage_away-strike_advantage_discount) / 5) * 5)
+final_data['put_strike'] = np.where(final_data['bullish'] == 1, np.round(final_data['entry'] * (1-base_strike_percentage_away+strike_advantage_discount) / 5) * 5, np.round(final_data['entry'] * (1-base_strike_percentage_away) / 5) * 5)
 
 
-# Calculate the percentage change between 'Open' and 'entry' prices
-final_data["percent_change"] = np.abs(
-    (final_data["entry"] - final_data["Open"]) / final_data["Open"]
-)
-
-percent_from_strike = 0.005 # each 0.1% away is around 6
-final_data["percent_from_strike"] = percent_from_strike
-
-final_data["option_strike"] = np.where(
-    final_data["option_type"] == "call",
-    np.ceil(final_data["entry"] * (1 + percent_from_strike) / 5) * 5,
-    np.floor(final_data["entry"] * (1 - percent_from_strike) / 5) * 5,
-)
-
-
-# cut loss roughly 10 away from strike. in reality is 5% for cut off but will use 10 % conservatively to account for IV spikes since we are using stops
-final_data["cut_loss_price"] = np.where(
-    final_data["option_type"] == "call",
-    final_data["option_strike"] - 10, 
-    final_data["option_strike"] + 10,
-)
-
-final_data["win"] = np.where(
-    (
-        (final_data["option_type"] == "call")
-        & (final_data["Close"] < final_data["cut_loss_price"])
-    )
-    | (
-        (final_data["option_type"] == "put")
-        & (final_data["Close"] > final_data["cut_loss_price"])
-    ),
-    1,
-    0,
-)
+# calculate cut off put, and cut off call strike. it will be 5 points above and below the put and call strike
+final_data['cut_off_call'] = final_data['call_strike'] - 5
+final_data['cut_off_put'] = final_data['put_strike'] + 5
 
 # calculate win rate
-win_rate = round(final_data["win"].sum() / len(final_data) * 100, 2)
+final_data['win'] = np.where((final_data['Close'] < final_data['cut_off_call']) & (final_data['Close'] > final_data['cut_off_put']), 1, 0)
 
-# for every win, add 1.6% of capital to capital, each loss subtract 5% from capital. compounded
-final_data["capital"] = capital
-final_data["cum_profit_loss"] = 0
-for i in range(len(final_data)):
-    if final_data["win"].iloc[i] == 1:
-        final_data["capital"][i] = round(final_data["capital"].iloc[i - 1] * 1.016, 2)
+# calculate capital at the end, given every win gives 2% return and every loss gives 2% loss
+final_data['capital'] = capital
+for i in range(1, len(final_data)):
+    if final_data.loc[i-1, 'win'] == 1:
+        final_data.loc[i, 'capital'] = final_data.loc[i-1, 'capital'] * 1.02
     else:
-        final_data["capital"][i] = round(final_data["capital"].iloc[i - 1] * 0.95, 2)
+        final_data.loc[i, 'capital'] = final_data.loc[i-1, 'capital'] * 0.98
 
-final_data["cum_profit_loss"] = round(final_data["capital"] - capital, 2)
+# Format capital to display as plain numbers
+final_data['capital'] = final_data['capital'].map('{:,.2f}'.format)
 
-
-# reorder columns Date, Open, entry, Close, option_type, option_strike, win
-final_data = final_data[
-    [
-        "Date",
-        "Open",
-        "entry",
-        "Close",
-        "option_type",
-        "percent_from_strike",
-        "option_strike",
-        "cut_loss_price",
-        "win",
-        "capital",
-        "cum_profit_loss",
-    ]
-]
 print(final_data)
-print(f"Win rate: {win_rate}%")
+# print win rate
+print(final_data['win'].sum() / len(final_data))
+

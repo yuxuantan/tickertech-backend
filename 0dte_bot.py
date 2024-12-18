@@ -53,8 +53,6 @@ def get_multiplier_and_lookback(tf):
         return 3, 2
     elif tf == "5m":
         return 2, 6
-    elif tf == "1m":
-        return 1, 10
 
 
 def calculate_rating(data, tf, multiplier, look_back_num_bars):
@@ -93,13 +91,19 @@ def check_for_formation(func, data, look_back_num_bars, multiplier):
     )
 
 
-def get_option_type(bull_or_bear_rating, current_price, open_price):
+def get_option_type(bull_or_bear_rating, current_price, open_price, current_time):
     if bull_or_bear_rating > 0:
         return "PUT"
     elif bull_or_bear_rating < 0:
         return "CALL"
     else:
-        return None
+        if current_time.hour >= 13:
+            # reversal more likely
+            return "PUT" if current_price < open_price else "CALL"
+        else:
+            # bull bias
+            return "PUT"
+
 
 
 def calculate_strike_price(current_price, current_hour, option_type):
@@ -177,32 +181,24 @@ def main(is_real=False):
 
     expiry = current_time.strftime("%Y-%m-%d")
     tc = TigerController()
-
+    
     while current_time.hour == 14 or current_time.hour == 15 or not is_real:
         
         spx_positions = get_open_positions(tc)
         spx_short_positions = [p for p in spx_positions if p.quantity < 0]
         if not spx_short_positions or not is_real:
             print("NO open positions. Look to enter new trades")
-            timeframes = ["30m", "15m", "5m", "1m"]
+            timeframes = ["30m", "15m", "5m"]
             bull_or_bear_rating = get_bull_or_bear_rating(timeframes)
             daily_data = yf.download("^GSPC", period="1d", interval="1d")
             current_price = daily_data["Close"].iloc[-1]
             open_price = daily_data["Open"].iloc[-1]
 
-            # take into account that reversal is more likely
-            if current_price > open_price:
-                bull_or_bear_rating -= 1
-            elif current_price < open_price:
-                bull_or_bear_rating += 1
 
             option_type = get_option_type(
-                bull_or_bear_rating, current_price, open_price
+                bull_or_bear_rating, current_price, open_price, current_time
             )
-            if option_type is None:
-                print("bull or bear rating is 0. retry later")
-                continue
-            
+
             print(f"bull_or_bear_rating: {bull_or_bear_rating}")
 
             short_strike_price = calculate_strike_price(
@@ -218,89 +214,86 @@ def main(is_real=False):
 
             # if bid_price or ask_price is None, then abort
             if (
-                short_leg_quote["bid_price"].values[0] is None
-                or short_leg_quote["ask_price"].values[0] is None
+                short_leg_quote["bid_price"].values[0] is not None
+                and short_leg_quote["ask_price"].values[0] is not None
             ):
-                print("no bid or ask price for short leg. retry later")
-                continue
-
-            short_leg_mid_price = (
-                short_leg_quote["bid_price"].values[0]
-                + short_leg_quote["ask_price"].values[0]
-            ) / 2
-
-            spreads_to_try = [5, 10, 15, 20, 25]
-            long_strike_prices_to_try = [
-                short_strike_price + spread
-                if option_type == "CALL"
-                else short_strike_price - spread
-                for spread in spreads_to_try
-            ]
-
-            for long_strike_price in long_strike_prices_to_try:
-                long_leg_quote = get_leg_quote(
-                    tc, expiry, long_strike_price, option_type
-                ).copy()
-
-                # if bid_price or ask_price is None, then abort
-                if (
-                    long_leg_quote["bid_price"].values[0] is None
-                    or long_leg_quote["ask_price"].values[0] is None
-                ):
-                    print("no bid or ask price for long leg. retry later")
-                    continue
-
-                long_leg_mid_price = (
-                    long_leg_quote["bid_price"].values[0]
-                    + long_leg_quote["ask_price"].values[0]
+                short_leg_mid_price = (
+                    short_leg_quote["bid_price"].values[0]
+                    + short_leg_quote["ask_price"].values[0]
                 ) / 2
 
-                target_premium = calculate_target_premium(
-                    short_leg_mid_price, long_leg_mid_price
-                )
+                spreads_to_try = [5, 10, 15, 20, 25]
+                long_strike_prices_to_try = [
+                    short_strike_price + spread
+                    if option_type == "CALL"
+                    else short_strike_price - spread
+                    for spread in spreads_to_try
+                ]
 
-                if target_premium >= 0.15:
-                    print(
-                        f"short_strike_price: {short_strike_price}, long_strike_price: {long_strike_price}"
-                    )
-                    print(f"target premium: {target_premium}")
-                    excess_liquidity = (
-                        tc.trade_client.get_assets()[0].segments["S"].excess_liquidity
-                    )
-                    max_contracts_given_buying_power = round(
-                        excess_liquidity
-                        / (abs(short_strike_price - long_strike_price) * 100)
-                        * 0.8,
-                        0,
-                    )
-                    max_contracts_given_target_profit = (
-                        round(excess_liquidity * 0.01 / (target_premium * 100), 0)
-                        if target_premium > 0
-                        else 999999999999
-                    )
-                    target_qty = min(
-                        max_contracts_given_buying_power,
-                        max_contracts_given_target_profit,
-                    )
-                    print(f"target qty: {target_qty}")
+                for long_strike_price in long_strike_prices_to_try:
+                    long_leg_quote = get_leg_quote(
+                        tc, expiry, long_strike_price, option_type
+                    ).copy()
 
-                    if is_real:
-                        order_id = place_order(
-                            tc,
-                            expiry,
-                            short_strike_price,
-                            long_strike_price,
-                            option_type,
-                            target_qty,
-                            target_premium,
+                    # if bid_price or ask_price is None, then abort
+                    if (
+                        long_leg_quote["bid_price"].values[0] is None
+                        or long_leg_quote["ask_price"].values[0] is None
+                    ):
+                        print("no bid or ask price for long leg. retry later")
+                        continue
+
+                    long_leg_mid_price = (
+                        long_leg_quote["bid_price"].values[0]
+                        + long_leg_quote["ask_price"].values[0]
+                    ) / 2
+
+                    target_premium = calculate_target_premium(
+                        short_leg_mid_price, long_leg_mid_price
+                    )
+
+                    if target_premium >= 0.15:
+                        print(
+                            f"short_strike_price: {short_strike_price}, long_strike_price: {long_strike_price}"
                         )
-                        order_res = tc.trade_client.get_order(id=order_id)
-                        TelegramController.send_message(
-                            message=f"order placed: {order_res}"
+                        print(f"target premium: {target_premium}")
+                        excess_liquidity = (
+                            tc.trade_client.get_assets()[0].segments["S"].excess_liquidity
                         )
-                    break
-                else:
-                    print(f"target premium too low: {target_premium}")
+                        max_contracts_given_buying_power = round(
+                            excess_liquidity
+                            / (abs(short_strike_price - long_strike_price) * 100)
+                            * 0.8,
+                            0,
+                        )
+                        max_contracts_given_target_profit = (
+                            round(excess_liquidity * 0.01 / (target_premium * 100), 0)
+                            if target_premium > 0
+                            else 999999999999
+                        )
+                        target_qty = min(
+                            max_contracts_given_buying_power,
+                            max_contracts_given_target_profit,
+                        )
+                        print(f"target qty: {target_qty}")
+
+                        if is_real:
+                            order_id = place_order(
+                                tc,
+                                expiry,
+                                short_strike_price,
+                                long_strike_price,
+                                option_type,
+                                target_qty,
+                                target_premium,
+                            )
+                            order_res = tc.trade_client.get_order(id=order_id)
+                            TelegramController.send_message(
+                                message=f"order placed: {order_res}"
+                            )
+                        break
+                    else:
+                        print(f"target premium too low: {target_premium}")
 
         else:
             print(
@@ -366,12 +359,12 @@ def main(is_real=False):
                     if (
                         pnl <= -200
                         and (
-                            current_time.hour == 14
-                            and abs(current_price - spx_position.contract.strike) < 10
+                            current_time.hour == 14 # 3am-4am sgt
+                            and abs(current_price - float(spx_position.contract.strike)) < 10
                         )
                         or (
-                            current_time.hour == 15
-                            and abs(current_price - spx_position.contract.strike) < 5
+                            current_time.hour == 15 # 4am-5am sgt
+                            and abs(current_price - float(spx_position.contract.strike)) < 5
                         )
                     ):
                         print("manual market order stop loss because pnl < -200%")
@@ -491,4 +484,4 @@ def main(is_real=False):
 
 
 if __name__ == "__main__":
-    main(is_real=True)
+    main(is_real=False)

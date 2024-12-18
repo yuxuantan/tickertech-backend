@@ -15,10 +15,12 @@ from utils.indicator_helpers import (
 ## Uncomment line below to log debug messages
 # logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 
-
-def get_apex_bull_raging_dates(data, custom_aggregate_2days = True, flush_treshold = 0.7, ratio_of_flush_bars_to_consider_raging = 0.3, only_fetch_last = False):
+# MY definition of flush down is big magnitude of price movement per bar (2x), compared to the median for all the data (high - low). 
+def get_apex_bull_raging_dates(data, custom_aggregate_2days = True, flush_treshold = 2, ratio_of_flush_bars_to_consider_raging = 0.3, only_fetch_last = False):
     if custom_aggregate_2days:
         data = get_2day_aggregated_data(data)
+
+    median_price_movement_per_bar = (data["High"] - data["Low"]).median()
 
     high_inflexion_points = get_high_inflexion_points(data)
     potential_bear_traps = get_low_inflexion_points(data)
@@ -66,9 +68,7 @@ def get_apex_bull_raging_dates(data, custom_aggregate_2days = True, flush_tresho
 
         # Analyze the range from high point to stopping point
         range_data = data.loc[high_point_date:stopping_point_date]
-        flush_down_mask = (range_data["Open"] - range_data["Close"]) > flush_treshold * (
-            range_data["High"] - range_data["Low"]
-        )
+        flush_down_mask = (range_data["High"] - range_data["Low"]) > flush_treshold * median_price_movement_per_bar
         flush_down_bars = range_data[flush_down_mask]
 
         if flush_down_bars.empty or flush_down_bars.iloc[0]["High"] < mid_point:
@@ -129,10 +129,12 @@ def get_apex_bull_raging_dates(data, custom_aggregate_2days = True, flush_tresho
     return bull_raging_dates
 
 
-def get_apex_bear_raging_dates(data, custom_aggregate_2days = True, flush_treshold = 0.7, ratio_of_flush_bars_to_consider_raging = 0.3, only_fetch_last = False):
+def get_apex_bear_raging_dates(data, custom_aggregate_2days = True, flush_treshold = 2, ratio_of_flush_bars_to_consider_raging = 0.3, only_fetch_last = False):
 
     if custom_aggregate_2days:
         data = get_2day_aggregated_data(data)
+
+    median_price_movement_per_bar = (data["High"] - data["Low"]).median()
 
     low_inflexion_points = get_low_inflexion_points(data)
     potential_bull_traps = get_high_inflexion_points(data)
@@ -180,10 +182,8 @@ def get_apex_bear_raging_dates(data, custom_aggregate_2days = True, flush_tresho
 
         # Analyze the range from low point to stopping point
         range_data = data.loc[low_point_date:stopping_point_date]
-        flush_up_mask = (range_data["Close"] - range_data["Open"]) > flush_treshold * (
-            range_data["High"] - range_data["Low"]
-        )
-        flush_up_bars = range_data[flush_up_mask]
+        flush_down_mask = (range_data["High"] - range_data["Low"]) > flush_treshold * median_price_movement_per_bar
+        flush_up_bars = range_data[flush_down_mask]
 
         if flush_up_bars.empty or flush_up_bars.iloc[0]["Low"] > mid_point:
             # logging.info("❌ first flush up started after mid point, or didn't happen at all")
@@ -207,9 +207,9 @@ def get_apex_bear_raging_dates(data, custom_aggregate_2days = True, flush_tresho
         # )
 
         total_bar_count = len(range_data)
-        flush_up_count = flush_up_mask.sum()
+        flush_down_count = flush_down_mask.sum()
 
-        if total_bar_count < 5 or flush_up_count / total_bar_count < ratio_of_flush_bars_to_consider_raging:
+        if total_bar_count < 5 or flush_down_count / total_bar_count < ratio_of_flush_bars_to_consider_raging:
             # logging.info(
             #     f"❌ less than 5 bars or not majority flush up, flush up bars: {flush_up_count}, total bars: {total_bar_count}"
             # )
